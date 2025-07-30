@@ -2,26 +2,32 @@
 export interface User {
   id: string;
   email: string;
-  name: string; // Maps to full_name from API
-  role: 'admin' | 'super_admin' | 'manager' | 'customer' | 'instructor';
-  avatar?: string | null; // Maps to photo_url from API
-  phone?: string; // Maps to phone_number from API
-  address?: string; // From API
-  createdAt: string; // Maps to created_at from API
-  lastLoginAt?: string; // Maps to updated_at from API
+  name: string;
+  role: 'admin' | 'customer';
+  avatar?: string | null;
+  phone?: string;
+  address?: string;
+  createdAt: string;
+  lastLoginAt?: string;
 }
 
-// API Response structure from /auth/customer/me
 export interface ApiUserResponse {
   id: number;
+  identifier: string;
   email: string;
   full_name: string;
+  provider: string;
   phone_number: string;
   address: string;
+  user_type: 'admin' | 'customer';
+  stripe_customer_id: string;
+  status: string;
   photo_url: string | null;
-  user_type: 'admin' | 'customer' | 'instructor';
+  email_verified_at: string;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
+  created_by: number;
 }
 
 export interface LoginCredentials {
@@ -32,9 +38,9 @@ export interface LoginCredentials {
 
 export interface AuthResponse {
   user: User;
-  token: string; // Will be 'cookie-based' since we use HTTP-only cookies
-  refreshToken: string; // Will be 'cookie-based' since we use HTTP-only cookies
-  expiresIn: number; // Not provided by current API
+  token: string;
+  refreshToken: string;
+  expiresIn: number;
 }
 
 export interface AuthError {
@@ -45,7 +51,7 @@ export interface AuthError {
 
 export interface AuthState {
   user: User | null;
-  token: string | null; // Will be 'cookie-based' when authenticated
+  token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   error: AuthError | null;

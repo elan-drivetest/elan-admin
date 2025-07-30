@@ -5,7 +5,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, User, MapPin, Calendar, DollarSign, Route, GraduationCap } from 'lucide-react';
+import { MoreVertical, User, MapPin, Calendar, DollarSign, Route, GraduationCap, RefreshCw } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -14,99 +14,113 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-
-export interface RideSessionData {
-  id: string;
-  userName: string;
-  centerName: string;
-  pickupLocation: string;
-  dateTime: string;
-  testType: 'G1' | 'G2';
-  price: number;
-  instructorName: string;
-  distance: string;
-  duration: string;
-  status: 'on_progress' | 'completed' | 'cancelled' | 'scheduled';
-}
+import { TableSkeleton } from '@/components/ui/loading-state';
+import type { AdminRideSession, AdminRideSessionsParams } from '@/types/admin';
 
 interface RideSessionsTableProps {
   title: string;
-  data: RideSessionData[];
+  data: AdminRideSession[];
+  isLoading?: boolean;
+  onSearch?: (params: Partial<AdminRideSessionsParams>) => void;
+  onRefresh?: () => void;
+  onViewDetails?: (sessionId: string) => void;
 }
 
-export default function RideSessionsTable({ title, data }: RideSessionsTableProps) {
-  const getStatusDisplay = (status: string) => {
-    const statusConfig = {
-      'on_progress': { color: 'bg-blue-100 text-blue-800', text: 'on progress' },
-      'completed': { color: 'bg-green-100 text-green-800', text: 'completed' },
-      'cancelled': { color: 'bg-red-100 text-red-800', text: 'cancelled' },
-      'scheduled': { color: 'bg-yellow-100 text-yellow-800', text: 'scheduled' },
-    };
-
-    const config = statusConfig[status as keyof typeof statusConfig] || 
-                  { color: 'bg-gray-100 text-gray-800', text: status };
-
-    return (
-      <Badge className={config.color}>
-        {config.text}
-      </Badge>
-    );
+export default function RideSessionsTable({ 
+  title, 
+  data, 
+  isLoading = false,
+  onSearch,
+  onRefresh,
+  onViewDetails
+}: RideSessionsTableProps) {
+  const formatPrice = (price: number) => {
+    return `$${(price / 100).toFixed(0)} CAD`;
   };
 
-  const getPriceDisplay = (price: number) => {
-    return <span className="text-green-600 font-medium">${price} CAD</span>;
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
-    <Card>
+    <Card className="relative">
       <CardHeader>
-        <CardTitle className="text-lg font-semibold">{title}</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg font-semibold">{title}</CardTitle>
+          <div className="flex items-center gap-2">
+            {onRefresh && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={onRefresh}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            )}
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>User name</TableHead>
-              <TableHead>Center Name</TableHead>
-              <TableHead>Pickup --- dropoff Location</TableHead>
-              <TableHead>date and time</TableHead>
-              <TableHead>G1/G2</TableHead>
-              <TableHead>$200 CAD</TableHead>
-              <TableHead>Instructors Name</TableHead>
-              <TableHead>$50 CAD</TableHead>
-              <TableHead>120 km</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.length === 0 ? (
+        {isLoading && data.length === 0 && (
+          <TableSkeleton rows={5} columns={11} />
+        )}
+
+        {!isLoading && data.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            <Route className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+            <p>No ride sessions found</p>
+          </div>
+        )}
+
+        {!isLoading && data.length > 0 && (
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-gray-500">
-                  No ride sessions found
-                </TableCell>
+                <TableHead>User name</TableHead>
+                <TableHead>Center Name</TableHead>
+                <TableHead>Pickup → Dropoff Location</TableHead>
+                <TableHead>Date and time</TableHead>
+                <TableHead>Test Type</TableHead>
+                <TableHead>Total Price</TableHead>
+                <TableHead>Instructors Name</TableHead>
+                <TableHead>Instructor Earnings</TableHead>
+                <TableHead>Distance</TableHead>
+                <TableHead>Duration</TableHead>
+                <TableHead></TableHead>
               </TableRow>
-            ) : (
-              data.map((session) => (
+            </TableHeader>
+            <TableBody>
+              {data.map((session) => (
                 <TableRow key={session.id} className="hover:bg-gray-50">
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
                         <User className="w-4 h-4 text-gray-600" />
                       </div>
-                      <span className="font-medium text-sm">{session.userName}</span>
+                      <span className="font-medium text-sm">{session.username}</span>
                     </div>
                   </TableCell>
                   <TableCell>
                     <span className="text-sm">{session.centerName}</span>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm max-w-[150px]">
-                      <span className="truncate">{session.pickupLocation}</span>
+                    <div className="text-sm max-w-[200px]">
+                      <span className="truncate block">{session.pickupLocation} → {session.dropoffLocation}</span>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm">{session.dateTime}</span>
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-gray-400" />
+                      <span className="text-sm">{formatDateTime(session.dateTime)}</span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="font-medium">
@@ -114,7 +128,10 @@ export default function RideSessionsTable({ title, data }: RideSessionsTableProp
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {getPriceDisplay(session.price)}
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="w-3 h-3 text-green-500" />
+                      <span className="text-green-600 font-medium">{formatPrice(session.totalPrice)}</span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -125,29 +142,43 @@ export default function RideSessionsTable({ title, data }: RideSessionsTableProp
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-green-600 font-medium">$50 CAD</span>
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="w-3 h-3 text-green-500" />
+                      <span className="text-green-600 font-medium">{formatPrice(session.instructorEarnings)}</span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Route className="w-3 h-3 text-gray-400" />
-                      <span className="text-sm">{session.distance}</span>
+                      <span className="text-sm">{session.totalDistance}km</span>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1">
-                      <span className="text-sm">{session.duration}</span>
-                    </div>
+                    <span className="text-sm">{session.totalHours}hr</span>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => onViewDetails?.(session.id.toString())}
+                    >
                       <MoreVertical className="w-4 h-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        {isLoading && data.length > 0 && (
+          <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-lg">
+            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-md">
+              <RefreshCw className="w-4 h-4 animate-spin text-primary" />
+              <span className="text-sm">Refreshing...</span>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -13,7 +13,8 @@ type AuthAction =
   | { type: 'LOGOUT' }
   | { type: 'SET_USER'; payload: User }
   | { type: 'CLEAR_ERROR' }
-  | { type: 'SET_LOADING'; payload: boolean };
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SESSION_EXPIRED' };
 
 const initialState: AuthState = {
   user: null,
@@ -44,6 +45,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         error: action.payload,
       };
     case 'LOGOUT':
+    case 'SESSION_EXPIRED':
       return {
         ...initialState,
         isLoading: false,
@@ -54,7 +56,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         user: action.payload,
         isAuthenticated: true,
         isLoading: false,
-        token: 'cookie-based', // Indicate we're using cookies
+        token: 'cookie-based',
       };
     case 'CLEAR_ERROR':
       return { ...state, error: null };
@@ -68,8 +70,9 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
 interface AuthContextValue extends AuthState {
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
-  clearError: () => void;
+  updateProfile: (data: any) => Promise<void>;
   refreshAuth: () => Promise<void>;
+  clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -82,38 +85,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const router = useRouter();
 
-  // Initialize auth state on mount
+  const handleSessionExpiry = () => {
+    dispatch({ type: 'SESSION_EXPIRED' });
+    authService.clearAuthData();
+    router.push('/login');
+  };
+
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // Try to get user from localStorage first (faster)
         const { user: cachedUser } = authService.getAuthData();
         
         if (cachedUser) {
-          // Verify the session is still valid by fetching current user
           try {
             const currentUser = await authService.getCurrentUser();
             dispatch({ type: 'SET_USER', payload: currentUser });
-            
-            // Update localStorage with latest user data
             authService.setAuthData({
               user: currentUser,
               token: 'cookie-based',
               refreshToken: 'cookie-based',
               expiresIn: 0,
             });
-          } catch (error) {
-            // Session is invalid, clear cached data
-            authService.clearAuthData();
-            dispatch({ type: 'LOGOUT' });
+          } catch (error: any) {
+            if (error?.response?.status === 401) {
+              handleSessionExpiry();
+            } else {
+              authService.clearAuthData();
+              dispatch({ type: 'LOGOUT' });
+            }
           }
         } else {
-          // No cached user, check if we have valid cookies
           try {
             const currentUser = await authService.getCurrentUser();
             dispatch({ type: 'SET_USER', payload: currentUser });
-            
-            // Cache user data
             authService.setAuthData({
               user: currentUser,
               token: 'cookie-based',
@@ -121,7 +125,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
               expiresIn: 0,
             });
           } catch (error) {
-            // No valid session
             dispatch({ type: 'SET_LOADING', payload: false });
           }
         }
@@ -133,6 +136,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     initializeAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = async (credentials: LoginCredentials) => {
@@ -150,12 +154,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         },
       });
 
-      // Redirect based on user role
-      const redirectPath = authResponse.user.role === 'customer' ? '/dashboard' : '/admin';
-      router.push(redirectPath);
+      router.push('/dashboard');
     } catch (error: any) {
-      console.error('Login error:', error);
-      
       const authError: AuthError = {
         message: error?.response?.data?.message || 
                 error?.message || 
@@ -175,10 +175,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
       router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);
-      // Even if logout API fails, clear local state
       authService.clearAuthData();
       dispatch({ type: 'LOGOUT' });
       router.push('/login');
+    }
+  };
+
+  const updateProfile = async (data: any) => {
+    try {
+      const updatedUser = await authService.updateProfile(data);
+      dispatch({ type: 'SET_USER', payload: updatedUser });
+    } catch (error: any) {
+      const authError: AuthError = {
+        message: error?.response?.data?.message || 'Failed to update profile',
+        code: 'PROFILE_UPDATE_ERROR',
+      };
+      dispatch({ type: 'LOGIN_ERROR', payload: authError });
+      throw error;
     }
   };
 
@@ -195,11 +208,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
           token: authResponse.token,
         },
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Token refresh error:', error);
-      authService.clearAuthData();
-      dispatch({ type: 'LOGOUT' });
-      router.push('/login');
+      if (error?.response?.status === 401) {
+        handleSessionExpiry();
+      } else {
+        authService.clearAuthData();
+        dispatch({ type: 'LOGOUT' });
+        router.push('/login');
+      }
     }
   };
 
@@ -211,8 +228,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     ...state,
     login,
     logout,
-    clearError,
+    updateProfile,
     refreshAuth,
+    clearError,
   };
 
   return (

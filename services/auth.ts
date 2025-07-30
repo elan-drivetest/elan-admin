@@ -9,39 +9,13 @@ const authClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // Important: This enables cookies to be sent with requests
+  withCredentials: true,
 });
 
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await authClient.post('/auth/customer/email/login', credentials);
+    const response = await authClient.post('/auth/admin/login', credentials);
     
-    // Since the API only returns status 200 and sets cookies,
-    // we need to get the user data separately
-    const user = await this.getCurrentUser();
-    
-    return {
-      user,
-      // These are now handled by HTTP-only cookies
-      token: 'cookie-based',
-      refreshToken: 'cookie-based',
-      expiresIn: 0, // Not provided by API
-    };
-  },
-
-  async logout(): Promise<void> {
-    try {
-      await authClient.post('/auth/customer/logout');
-    } finally {
-      // Clear any local storage if used
-      this.clearAuthData();
-    }
-  },
-
-  async refreshToken(): Promise<AuthResponse> {
-    const response = await authClient.post('/auth/customer/refresh');
-    
-    // Get updated user data after refresh
     const user = await this.getCurrentUser();
     
     return {
@@ -52,12 +26,61 @@ export const authService = {
     };
   },
 
+  async logout(): Promise<void> {
+    try {
+      await authClient.post('/auth/admin/logout');
+    } finally {
+      this.clearAuthData();
+    }
+  },
+
   async getCurrentUser(): Promise<User> {
-    const response = await authClient.get('/auth/customer/me');
+    try {
+      const response = await authClient.get('/auth/admin/me');
+      
+      const apiUser = response.data;
+      return {
+        id: apiUser.id.toString(),
+        email: apiUser.email,
+        name: apiUser.full_name,
+        role: this.mapUserTypeToRole(apiUser.user_type),
+        avatar: apiUser.photo_url,
+        phone: apiUser.phone_number,
+        address: apiUser.address,
+        createdAt: apiUser.created_at,
+        lastLoginAt: apiUser.updated_at,
+      };
+    } catch (error) {
+      this.clearAuthData();
+      throw error;
+    }
+  },
+
+  async refreshToken(): Promise<AuthResponse> {
+    const response = await authClient.post('/auth/admin/refresh');
+    const user = await this.getCurrentUser();
     
-    // Transform API response to match our User type
-    const apiUser = response.data;
     return {
+      user,
+      token: 'cookie-based',
+      refreshToken: 'cookie-based',
+      expiresIn: 0,
+    };
+  },
+
+  async updateProfile(data: {
+    full_name?: string;
+    email?: string;
+    password?: string;
+    oldPassword?: string;
+    phone_number?: string;
+    address?: string;
+    photo_url?: string;
+  }): Promise<User> {
+    const response = await authClient.patch('/auth/admin/me', data);
+    
+    const apiUser = response.data;
+    const user = {
       id: apiUser.id.toString(),
       email: apiUser.email,
       name: apiUser.full_name,
@@ -66,58 +89,65 @@ export const authService = {
       phone: apiUser.phone_number,
       address: apiUser.address,
       createdAt: apiUser.created_at,
-      lastLoginAt: apiUser.updated_at, // Using updated_at as proxy for last login
+      lastLoginAt: apiUser.updated_at,
     };
+    
+    this.setAuthData({ user, token: 'cookie-based', refreshToken: 'cookie-based', expiresIn: 0 });
+    
+    return user;
   },
 
-  async forgotPassword(email: string): Promise<void> {
-    // This endpoint is not documented yet, implement when available
-    throw new Error('Forgot password functionality not yet implemented');
+  async createAdmin(data: {
+    full_name: string;
+    email: string;
+    phone_number: string;
+  }): Promise<void> {
+    await authClient.post('/auth/admin/create-admin', data);
   },
 
-  async resetPassword(token: string, password: string): Promise<void> {
-    // This endpoint is not documented yet, implement when available
-    throw new Error('Reset password functionality not yet implemented');
-  },
-
-  // Helper method to map API user_type to our role system
-  mapUserTypeToRole(userType: string): 'admin' | 'super_admin' | 'manager' | 'customer' | 'instructor' {
+  mapUserTypeToRole(userType: string): 'admin' | 'customer' {
     switch (userType) {
       case 'admin':
         return 'admin';
       case 'customer':
         return 'customer';
-      case 'instructor':
-        return 'instructor';
       default:
-        return 'customer'; // Default fallback
+        return 'admin';
     }
   },
 
-  // Since we're using HTTP-only cookies, these methods are simplified
   setAuthData(authResponse: AuthResponse): void {
-    // Store user data in localStorage for quick access
-    // Tokens are handled by HTTP-only cookies
-    localStorage.setItem('user', JSON.stringify(authResponse.user));
+    try {
+      localStorage.setItem('user', JSON.stringify(authResponse.user));
+    } catch (error) {
+      console.error('Error saving auth data:', error);
+    }
   },
 
   getAuthData(): { token: string | null; user: User | null } {
-    // Tokens are in HTTP-only cookies, so we can't access them
-    const userStr = localStorage.getItem('user');
-    const user = userStr ? JSON.parse(userStr) : null;
-    
-    return { 
-      token: 'cookie-based', // Indicate that we're using cookies
-      user 
-    };
+    try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      
+      return { 
+        token: user ? 'cookie-based' : null,
+        user 
+      };
+    } catch (error) {
+      console.error('Error parsing cached user data:', error);
+      this.clearAuthData();
+      return { token: null, user: null };
+    }
   },
 
   clearAuthData(): void {
-    localStorage.removeItem('user');
-    // Cookies are cleared by the logout endpoint
+    try {
+      localStorage.removeItem('user');
+    } catch (error) {
+      console.error('Error clearing auth data:', error);
+    }
   },
 
-  // Check if user is authenticated by trying to get current user
   async checkAuthStatus(): Promise<boolean> {
     try {
       await this.getCurrentUser();

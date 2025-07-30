@@ -15,7 +15,7 @@ export default function LoginPage() {
     <AuthLayout
       // Main Content
       title="Welcome Back!"
-      subtitle="Connect your entire supply chain from freight through fulfillment with instant pricing and booking."
+      subtitle="Connect to your Elan admin account"
       
       // Logo Configuration
       showLogo={true}
@@ -29,13 +29,12 @@ export default function LoginPage() {
       
       // Hero Section Configuration
       heroImage="/hero/cta-image.png"
-      heroTitle="Connect your entire supply chain from freight through fulfillment"
-      heroSubtitle="With instant pricing and booking, it only takes two minutes to set up and no credit card required. Get started now!"
+      heroTitle=""
+      heroSubtitle=""
       heroFeatures={[
-        "Instant setup in 2 minutes",
-        "No credit card required", 
-        "Enterprise-grade security",
-        "24/7 customer support"
+        "Admin dashboard",
+        "Rides Route Tracking", 
+        "And more..."
       ]}
       
       // Hide/Show Options
@@ -50,8 +49,8 @@ export default function LoginPage() {
       showHeroImage={true}
       
       // Styling Options
-      heroGradientFrom="from-green-600"
-      heroGradientTo="to-green-800"
+      heroGradientFrom="from-green-950"
+      heroGradientTo="to-green-600"
       heroImageOpacity="opacity-100"
       footerText="© 2025 Elan Road Test Rental. All rights reserved."
     >

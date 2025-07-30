@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 
 interface RouteProtectionProps {
   children: React.ReactNode;
-  requiredRole?: 'admin' | 'customer' | 'manager';
+  requiredRole?: 'admin' | 'customer';
   fallbackUrl?: string;
 }
 
@@ -21,35 +21,26 @@ export default function RouteProtection({
 
   useEffect(() => {
     if (!isLoading) {
-      // Not authenticated - redirect to login
       if (!isAuthenticated) {
         router.push(fallbackUrl);
         return;
       }
 
-      // Check role-based access
       if (requiredRole && user?.role !== requiredRole) {
-        // User doesn't have required role
-        if (user?.role === 'manager' && requiredRole === 'admin') {
-          // Manager trying to access admin-only content
-          router.push('/dashboard?error=insufficient_permissions');
-          return;
-        }
+        router.push('/dashboard?error=insufficient_permissions');
+        return;
       }
     }
   }, [isAuthenticated, isLoading, user, requiredRole, router, fallbackUrl]);
 
-  // Show loading state
   if (isLoading) {
     return <LoadingScreen />;
   }
 
-  // Not authenticated
   if (!isAuthenticated) {
     return <LoadingScreen />;
   }
 
-  // Role check failed
   if (requiredRole && user?.role !== requiredRole) {
     return <UnauthorizedScreen />;
   }

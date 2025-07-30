@@ -1,86 +1,116 @@
 // app/(dashboard)/sessions/page.tsx
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import DashboardHeader from '@/components/layouts/DashboardHeader';
-import KeyMetrics from '@/components/layouts/KeyMetrics';
 import RideSessionFilters from '@/components/ui/ride-session-filters';
 import RideSessionsTable from '@/components/tables/RideSessionsTable';
-import { mockRideSessionMetrics, mockRideSessions } from '@/lib/ride-session-mock-data';
-import type { RideSessionData } from '@/components/tables/RideSessionsTable';
+import RideSessionDetailModal from '@/components/modals/RideSessionDetailModal';
+import LoadingState, { CardSkeleton } from '@/components/ui/loading-state';
+import ErrorBoundary from '@/components/ui/error-boundary';
+import { Route } from 'lucide-react';
+import { useRideSessions } from '@/hooks/useAdmin';
+import type { AdminRideSessionsParams } from '@/types/admin';
 
 export default function RideSessionsPage() {
-  // Search states
-  const [centerSearch, setCenterSearch] = useState('');
-  const [instructorSearch, setInstructorSearch] = useState('');
-  const [userSearch, setUserSearch] = useState('');
-  const [dateSearch, setDateSearch] = useState('');
+  const [searchParams, setSearchParams] = useState<AdminRideSessionsParams>({
+    limit: 50,
+    orderBy: 'created_at',
+    orderDirection: 'desc'
+  });
 
-  // Filter the ride sessions based on search criteria
-  const filteredSessions = useMemo(() => {
-    return mockRideSessions.filter((session: RideSessionData) => {
-      // Center name search
-      const matchesCenter = centerSearch === '' || 
-        session.centerName.toLowerCase().includes(centerSearch.toLowerCase());
-      
-      // User name search
-      const matchesUser = userSearch === '' || 
-        session.userName.toLowerCase().includes(userSearch.toLowerCase());
+  const { data: rideSessions, isLoading, error, refetch } = useRideSessions(searchParams);
 
-      // Instructor name search
-      const matchesInstructor = instructorSearch === '' || 
-        session.instructorName.toLowerCase().includes(instructorSearch.toLowerCase());
+  // Modal state management
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
-      // Date search - convert date input to match our date format
-      const matchesDate = dateSearch === '' || (() => {
-        const searchDate = new Date(dateSearch);
-        const sessionDateStr = session.dateTime;
-        
-        // Extract date part from "Dec 15, 2024 - 2:30 PM" format
-        const sessionDatePart = sessionDateStr.split(' - ')[0];
-        
-        // Parse the session date
-        const sessionDate = new Date(sessionDatePart);
-        
-        // Compare dates (ignore time)
-        return searchDate.toDateString() === sessionDate.toDateString();
-      })();
+  const handleSearchUpdate = (newParams: Partial<AdminRideSessionsParams>) => {
+    const updatedParams = { ...searchParams, ...newParams };
+    setSearchParams(updatedParams);
+    refetch(updatedParams);
+  };
 
-      return matchesCenter && matchesUser && matchesInstructor && matchesDate;
-    });
-  }, [centerSearch, instructorSearch, userSearch, dateSearch]);
+  const handleViewDetails = (sessionId: string) => {
+    setSelectedSessionId(sessionId);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsDetailModalOpen(false);
+    setSelectedSessionId(null);
+  };
+
+  if (isLoading && rideSessions.length === 0) {
+    return (
+      <ErrorBoundary>
+        <>
+          <DashboardHeader
+            title="Ride Sessions"
+            subtitle="Manage driving lessons and track session progress."
+          />
+          <div className="px-6 space-y-6">
+            <CardSkeleton count={1} />
+            <LoadingState 
+              card 
+              text="Loading ride sessions..." 
+              className="py-12"
+            />
+          </div>
+        </>
+      </ErrorBoundary>
+    );
+  }
 
   return (
-    <>
-      {/* Header */}
-      <DashboardHeader
-        title="Ride Sessions"
-        subtitle="Manage driving lessons and track session progress."
-      />
-
-      {/* Key Metrics */}
-      <KeyMetrics metrics={mockRideSessionMetrics} />
-
-      {/* Main Content */}
-      <div className="px-6 space-y-6">
-        {/* Search Filters */}
-        <RideSessionFilters
-          centerSearch={centerSearch}
-          onCenterSearchChange={setCenterSearch}
-          instructorSearch={instructorSearch}
-          onInstructorSearchChange={setInstructorSearch}
-          userSearch={userSearch}
-          onUserSearchChange={setUserSearch}
-          dateSearch={dateSearch}
-          onDateSearchChange={setDateSearch}
+    <ErrorBoundary>
+      <>
+        <DashboardHeader
+          title="Ride Sessions"
+          subtitle="Manage driving lessons and track session progress."
         />
 
-        {/* All Ride Sessions Table */}
-        <RideSessionsTable 
-          title="All Ride Sessions"
-          data={filteredSessions}
+        <div className="px-6 space-y-6">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md">
+              <p className="font-medium">Error loading ride sessions</p>
+              <p className="text-sm">{error.message}</p>
+              <button onClick={() => refetch()} className="mt-2 text-sm underline hover:no-underline">
+                Try again
+              </button>
+            </div>
+          )}
+
+          <RideSessionFilters 
+            onSearch={handleSearchUpdate}
+            isLoading={isLoading}
+          />
+
+          <RideSessionsTable 
+            title={`All Ride Sessions (${rideSessions.length})`}
+            data={rideSessions}
+            isLoading={isLoading}
+            onSearch={handleSearchUpdate}
+            onRefresh={() => refetch()}
+            onViewDetails={handleViewDetails}
+          />
+
+          {!isLoading && rideSessions.length === 0 && (
+            <div className="text-center py-8 text-gray-500 bg-white rounded-lg border">
+              <Route className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p className="text-lg font-medium">No ride sessions found</p>
+              <p className="text-sm">Sessions will appear here when instructors complete rides.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Ride Session Detail Modal */}
+        <RideSessionDetailModal
+          isOpen={isDetailModalOpen}
+          onClose={handleCloseModal}
+          sessionId={selectedSessionId}
         />
-      </div>
-    </>
+      </>
+    </ErrorBoundary>
   );
 }
