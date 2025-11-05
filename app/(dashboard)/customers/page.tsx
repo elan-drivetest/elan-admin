@@ -71,7 +71,9 @@ export default function CustomersPage() {
           subtitle="Manage customer accounts and track their progress."
         />
 
-        <KeyMetrics metrics={metrics} />
+        <div className='px-6'>
+          <KeyMetrics metrics={metrics} />
+        </div>
 
         <div className="px-6 space-y-6">
           {error && (

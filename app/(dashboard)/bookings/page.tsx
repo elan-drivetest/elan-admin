@@ -172,7 +172,9 @@ export default function BookingsPage() {
         />
 
         {/* Key Metrics */}
-        <KeyMetrics metrics={metrics} />
+        <div className="px-6">
+          <KeyMetrics metrics={metrics} />
+        </div>
 
         {/* Main Content */}
         <div className="px-6 space-y-6">

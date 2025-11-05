@@ -20,7 +20,18 @@ import type {
   DashboardAnalyticsResponse,
   AdminRideSessionDetailResponse,
   AdminRideSessionsParams,
-  AdminRideSessionsResponse
+  AdminRideSessionsResponse,
+  AdminReferralCodeDetailResponse,
+  AdminReferralCodesParams,
+  AdminReferralCodesResponse,
+  AdminCouponDetailResponse,
+  AdminCouponsParams,
+  AdminCouponsResponse,
+  AdminCouponUsageParams,
+  AdminCouponUsageResponse,
+  TestCentersResponse,
+  AddonsResponse,
+  SystemSettingsResponse
 } from '@/types/admin';
 
 export function useRecentBookings(params?: AdminBookingsParams) {
@@ -415,4 +426,394 @@ export function useRideSessionDetail(id: string) {
   }, [id]);
 
   return { data, isLoading, error, refetch: fetchRideSession };
+}
+
+export function useReferralCodes(params?: AdminReferralCodesParams) {
+  const [data, setData] = useState<AdminReferralCodesResponse>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchReferralCodes = async (newParams?: AdminReferralCodesParams) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getReferralCodes(newParams || params);
+      setData(Array.isArray(response) ? response : []);
+    } catch (err: any) {
+      console.error('Referral codes fetch error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch referral codes',
+        code: 'FETCH_REFERRAL_CODES_ERROR'
+      });
+      setData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReferralCodes();
+  }, []);
+
+  return { data, isLoading, error, refetch: fetchReferralCodes };
+}
+
+export function useReferralCodeDetail(id: string) {
+  const [data, setData] = useState<AdminReferralCodeDetailResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchReferralCode = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getReferralCodeById(id);
+      setData(response);
+    } catch (err: any) {
+      console.error('Referral code detail fetch error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch referral code details',
+        code: 'FETCH_REFERRAL_CODE_DETAIL_ERROR'
+      });
+      setData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) {
+      fetchReferralCode();
+    }
+  }, [id]);
+
+  return { data, isLoading, error, refetch: fetchReferralCode };
+}
+
+export function useCoupons(params?: AdminCouponsParams) {
+  const [data, setData] = useState<AdminCouponsResponse>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchCoupons = async (newParams?: AdminCouponsParams) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getCoupons(newParams || params);
+      setData(Array.isArray(response) ? response : []);
+    } catch (err: any) {
+      console.error('Coupons fetch error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch coupons',
+        code: 'FETCH_COUPONS_ERROR'
+      });
+      setData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCoupons();
+  }, []);
+
+  return { data, isLoading, error, refetch: fetchCoupons };
+}
+
+export function useExpiredCoupons(params?: AdminCouponsParams) {
+  const [data, setData] = useState<AdminCouponsResponse>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchExpiredCoupons = async (newParams?: AdminCouponsParams) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getExpiredCoupons(newParams || params);
+      setData(Array.isArray(response) ? response : []);
+    } catch (err: any) {
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch expired coupons',
+        code: 'FETCH_EXPIRED_COUPONS_ERROR'
+      });
+      setData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchExpiredCoupons();
+  }, []);
+
+  return { data, isLoading, error, refetch: fetchExpiredCoupons };
+}
+
+export function useCouponDetail(id: string) {
+  const [data, setData] = useState<AdminCouponDetailResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchCoupon = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getCouponById(id);
+      setData(response);
+    } catch (err: any) {
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch coupon details',
+        code: 'FETCH_COUPON_DETAIL_ERROR'
+      });
+      setData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) {
+      fetchCoupon();
+    }
+  }, [id]);
+
+  return { data, isLoading, error, refetch: fetchCoupon };
+}
+
+export function useCouponUsage(params?: AdminCouponUsageParams) {
+  const [data, setData] = useState<AdminCouponUsageResponse>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchCouponUsage = async (newParams?: AdminCouponUsageParams) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getCouponUsage(newParams || params);
+      setData(Array.isArray(response) ? response : []);
+    } catch (err: any) {
+      console.error('Coupon usage fetch error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch coupon usage',
+        code: 'FETCH_COUPON_USAGE_ERROR'
+      });
+      setData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCouponUsage();
+  }, []);
+
+  return { data, isLoading, error, refetch: fetchCouponUsage };
+}
+
+export function useCouponUsageById(id: string, params?: AdminCouponUsageParams) {
+  const [data, setData] = useState<AdminCouponUsageResponse>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchCouponUsageById = async (newParams?: AdminCouponUsageParams) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getCouponUsageById(id, newParams || params);
+      setData(Array.isArray(response) ? response : []);
+    } catch (err: any) {
+      console.error('Coupon usage by ID fetch error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch coupon usage details',
+        code: 'FETCH_COUPON_USAGE_BY_ID_ERROR'
+      });
+      setData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) {
+      fetchCouponUsageById();
+    }
+  }, [id]);
+
+  return { data, isLoading, error, refetch: fetchCouponUsageById };
+}
+
+export function useTestCenters() {
+  const [data, setData] = useState<TestCentersResponse>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchTestCenters = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getTestCenters();
+      setData(Array.isArray(response) ? response : []);
+    } catch (err: any) {
+      console.error('Test centers fetch error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch test centers',
+        code: 'FETCH_TEST_CENTERS_ERROR'
+      });
+      setData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTestCenters();
+  }, [fetchTestCenters]);
+
+  // Helper function to get center by ID
+  const getCenterById = useCallback((id: number) => {
+    return data.find(center => center.id === id) || null;
+  }, [data]);
+
+  return { 
+    data, 
+    isLoading, 
+    error, 
+    refetch: fetchTestCenters,
+    getCenterById,
+    centers: data // Alias for consistency
+  };
+}
+
+export function useAddons() {
+  const [data, setData] = useState<AddonsResponse>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchAddons = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getAddons();
+      setData(Array.isArray(response) ? response : []);
+    } catch (err: any) {
+      console.error('Addons fetch error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch addons',
+        code: 'FETCH_ADDONS_ERROR'
+      });
+      setData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAddons();
+  }, [fetchAddons]);
+
+  return { data, isLoading, error, refetch: fetchAddons };
+}
+
+export function useActiveCoupons() {
+  const [data, setData] = useState<AdminCouponsResponse>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchActiveCoupons = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      // Use the existing getCoupons method instead of getActiveCoupons
+      const response = await adminService.getCoupons({
+        limit: 50,
+        orderBy: 'created_at',
+        orderDirection: 'desc',
+        is_active: true
+      });
+      setData(Array.isArray(response) ? response : []);
+    } catch (err: any) {
+      console.error('Active coupons fetch error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch coupons',
+        code: 'FETCH_ACTIVE_COUPONS_ERROR'
+      });
+      setData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchActiveCoupons();
+  }, [fetchActiveCoupons]);
+
+  return { data, isLoading, error, refetch: fetchActiveCoupons };
+}
+
+export function useInstructorById(id: string | null) {
+  const [data, setData] = useState<AdminInstructorDetailResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchInstructor = useCallback(async () => {
+    if (!id) return;
+    
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getInstructorById(id);
+      setData(response);
+    } catch (err: any) {
+      console.error('Instructor detail fetch error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch instructor details',
+        code: 'FETCH_INSTRUCTOR_DETAIL_ERROR'
+      });
+      setData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      fetchInstructor();
+    } else {
+      setData(null);
+      setError(null);
+      setIsLoading(false);
+    }
+  }, [id, fetchInstructor]);
+
+  return { data, isLoading, error, refetch: fetchInstructor };
+}
+
+export function useSystemSettings() {
+  const [data, setData] = useState<SystemSettingsResponse>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchSystemSettings = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getSystemSettings();
+      setData(Array.isArray(response) ? response : []);
+    } catch (err: any) {
+      console.error('System settings fetch error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch system settings',
+        code: 'FETCH_SYSTEM_SETTINGS_ERROR'
+      });
+      setData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSystemSettings();
+  }, []);
+
+  return { data, isLoading, error, refetch: fetchSystemSettings };
 }

@@ -126,3 +126,11 @@
     left: 100%;
   }
 }
+
+.perspective-distant {
+  perspective: 1000px;
+}
+
+.transform-3d {
+  transform-style: preserve-3d;
+}

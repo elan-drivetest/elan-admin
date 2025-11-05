@@ -71,6 +71,8 @@ export default function ProfilePage() {
                   <div className="flex-shrink-0">
                     {user.avatar ? (
                       <Image 
+                        width={200}
+                        height={200}
                         src={user.avatar} 
                         alt={user.name}
                         className="w-20 h-20 rounded-full object-cover border-2 border-gray-200"

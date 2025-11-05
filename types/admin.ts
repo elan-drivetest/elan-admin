@@ -1,5 +1,18 @@
 // types/admin.ts
 
+export interface DistanceCalculationRequest {
+  pickupLat: number;
+  pickupLng: number;
+  testCenterLat: number;
+  testCenterLng: number;
+}
+
+export interface DistanceCalculationResponse {
+  distance: number;
+  duration: number;
+}
+
+
 // Common types
 export interface ApiError {
   message: string;
@@ -44,6 +57,71 @@ export interface AdminCustomersParams extends PaginationParams {
 }
 
 export type AdminCustomersResponse = AdminCustomer[];
+
+export interface AdminInstructorDetail {
+  id: number;
+  identifier: string;
+  full_name: string;
+  email: string;
+  phone_number: string;
+  address: string;
+  status: string;
+  photo_url: string;
+  driving_school_name: string;
+  license_number: string;
+  license_validity_date: string;
+  profile_completion_percentage: number;
+  rating: number;
+  rating_count: number;
+  transfer_count: number;
+  wallet_balance: number;
+  referral_code: string;
+  stripe_account_id: string;
+  stripe_account_status: string;
+  stripe_payouts_enabled: boolean;
+  stripe_charges_enabled: boolean;
+  created_at: string;
+  vehicle: {
+    id: number;
+    brand: string;
+    model: string;
+    year: number;
+    color: string;
+    license_plate: string;
+    registration_doc_url: string;
+    insurance_doc_url: string;
+    vehicle_image_url: string;
+    status: string;
+  };
+  recent_rides: Array<{
+    id: number;
+    booking_id: number;
+    customer_name: string;
+    customer_email: string;
+    customer_phone: string;
+    start_time: string;
+    end_time: string;
+    status: string;
+    total_distance: string;
+    total_hours: string;
+    hourly_rate: number;
+    instructor_earnings: number;
+    pickup_location: string;
+    dropoff_location: string;
+    test_type: string;
+    center_name: string;
+    payment_scheduled_at: string;
+    payment_processed_at: string;
+  }>;
+  total_rides: number;
+  total_earnings: number;
+  total_withdrawn: number;
+  average_wage_per_ride: number;
+  average_time_per_ride: number;
+  average_distance_per_ride: number;
+}
+
+export type AdminInstructorDetailResponse = AdminInstructorDetail;
 
 export interface CustomerBooking {
   id: number;
@@ -145,41 +223,6 @@ export interface InstructorRecentRide {
   payment_scheduled_at: string;
   payment_processed_at: string;
 }
-
-export interface AdminInstructorDetail {
-  id: number;
-  identifier: string;
-  full_name: string;
-  email: string;
-  phone_number: string;
-  address: string;
-  status: string;
-  photo_url: string;
-  driving_school_name: string;
-  license_number: string;
-  license_validity_date: string;
-  profile_completion_percentage: number;
-  rating: number;
-  rating_count: number;
-  transfer_count: number;
-  wallet_balance: number;
-  referral_code: string;
-  stripe_account_id: string;
-  stripe_account_status: string;
-  stripe_payouts_enabled: boolean;
-  stripe_charges_enabled: boolean;
-  created_at: string;
-  vehicle: InstructorVehicle;
-  recent_rides: InstructorRecentRide[];
-  total_rides: number;
-  total_earnings: number;
-  total_withdrawn: number;
-  average_wage_per_ride: number;
-  average_time_per_ride: number;
-  average_distance_per_ride: number;
-}
-
-export type AdminInstructorDetailResponse = AdminInstructorDetail;
 
 // Instructor rides types
 export interface InstructorRide {
@@ -299,6 +342,7 @@ export interface CreateBookingRequest {
   pickup_address?: string;
   pickup_latitude?: number;
   pickup_longitude?: number;
+  pickup_distance?: number;
   addon_id?: number;
   coupon_code?: string;
   timezone: string; // Default: "America/Toronto"
@@ -413,3 +457,241 @@ export interface AdminRideSessionsParams extends PaginationParams {
 
 export type AdminRideSessionsResponse = AdminRideSession[];
 export type AdminRideSessionDetailResponse = AdminRideSessionDetail;
+
+// Referral Code types
+export interface AdminReferralCode {
+  id: number;
+  instructor_id: number;
+  code: string;
+  amount: number;
+  min_rides_required: number;
+  used_by_instructor_id?: number;
+  status: 'active' | 'claimed' | 'pending_payment' | 'partially_paid' | 'fully_paid' | 'expired';
+  used_at?: string;
+  rides_completed_count: number;
+  referrer_paid: number;
+  referee_paid: number;
+  referrer_payment_date?: string;
+  referee_payment_date?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminReferralCodesParams extends PaginationParams {
+  status?: 'active' | 'claimed' | 'pending_payment' | 'partially_paid' | 'fully_paid' | 'expired';
+}
+
+export interface UpdateReferralCodeStatusRequest {
+  status: 'active' | 'claimed' | 'pending_payment' | 'partially_paid' | 'fully_paid' | 'expired';
+}
+
+export type AdminReferralCodesResponse = AdminReferralCode[];
+export type AdminReferralCodeDetailResponse = AdminReferralCode;
+
+// Coupon types
+export interface AdminCoupon {
+  id: number;
+  name: string;
+  description: string;
+  code: string;
+  discount: number; // Amount in cents
+  is_recurrent: boolean;
+  is_failure_coupon: boolean;
+  min_purchase_amount: number; // Amount in cents
+  start_date: string;
+  expires_at: string;
+  usage_count: number;
+  is_active: boolean;
+  is_expired: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminCouponUsage {
+  id: number;
+  coupon_id: number;
+  coupon_code: string;
+  coupon_name: string;
+  discount_amount: number;
+  created_at: string;
+  booking_id: number;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  booking_date: string;
+  test_type: string;
+  booking_status: string;
+  total_price: number;
+  final_price: number;
+  test_center_name: string;
+  instructor_name: string;
+  pickup_address: string;
+  meet_at_center: boolean;
+  booking_created_at: string;
+}
+
+export interface AdminCouponsParams extends PaginationParams {
+  name?: string;
+  code?: string;
+  is_recurrent?: boolean;
+  is_failure_coupon?: boolean;
+  is_active?: boolean;
+  is_expired?: boolean;
+  start_date_from?: string;
+  start_date_to?: string;
+  expires_at_from?: string;
+  expires_at_to?: string;
+}
+
+export interface AdminCouponUsageParams extends PaginationParams {
+  coupon_code?: string;
+  coupon_name?: string;
+  customer_name?: string;
+  customer_email?: string;
+  booking_status?: string;
+  test_type?: string;
+  instructor_name?: string;
+  test_center_name?: string;
+  usage_date_from?: string;
+  usage_date_to?: string;
+  booking_date_from?: string;
+  booking_date_to?: string;
+}
+
+export interface CreateCouponRequest {
+  name: string;
+  description: string;
+  code: string;
+  discount: number;
+  is_recurrent: boolean;
+  is_failure_coupon: boolean;
+  min_purchase_amount: number;
+  start_date: string;
+  expires_at: string;
+}
+
+export interface UpdateCouponRequest {
+  name?: string;
+  description?: string;
+  code?: string;
+  discount?: number;
+  is_recurrent?: boolean;
+  is_failure_coupon?: boolean;
+  min_purchase_amount?: number;
+  start_date?: string;
+  expires_at?: string;
+}
+
+export type AdminCouponsResponse = AdminCoupon[];
+export type AdminCouponUsageResponse = AdminCouponUsage[];
+export type AdminCouponDetailResponse = AdminCoupon;
+
+// Test Center types
+export interface TestCenter {
+  id: number;
+  name: string;
+  address: string;
+  city: string;
+  province: string;
+  postal_code: string;
+  lat: number;
+  lng: number;
+  base_price: number; // Amount in cents
+  status: 'ACTIVE' | 'INACTIVE';
+  created_at: string;
+  updated_at: string;
+}
+
+export type TestCentersResponse = TestCenter[];
+
+// File Upload types
+export interface FileUploadResponse {
+  url: string;
+  filename: string;
+  size: number;
+  mimetype: string;
+}
+
+// Address Search types
+export interface AddressSearchRequest {
+  address: string;
+}
+
+export interface AddressSearchResponse {
+  formatted_address: string;
+  latitude: number;
+  longitude: number;
+  postal_code?: string;
+  city?: string;
+  province?: string;
+  country?: string;
+}
+
+// Coupon Verification types
+export interface CouponVerificationRequest {
+  code: string;
+}
+
+export interface CouponVerificationResponse {
+  id: number;
+  name: string;
+  description: string;
+  code: string;
+  discount: number; // Amount in cents
+  is_recurrent: boolean;
+  is_failure_coupon: boolean;
+  min_purchase_amount: number; // Amount in cents
+  start_date: string;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Addon types
+export interface Addon {
+  id: number;
+  name: string;
+  type: 'LESSON_G' | 'LESSON_G2';
+  description?: string;
+  price: number; // Amount in cents
+  duration: number | null; // Duration in seconds, null for mock tests
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type AddonsResponse = Addon[];
+
+// Customer dropdown type (reuse existing AdminCustomer but simplified)
+export interface CustomerOption {
+  id: number;
+  full_name: string;
+  email: string;
+  contact: string;
+}
+
+// Coupon option type (reuse existing AdminCoupon but simplified)
+export interface CouponOption {
+  id: number;
+  name: string;
+  code: string;
+  discount: number;
+  description: string;
+}
+
+export interface SystemSetting {
+  id?: number;
+  name: string;
+  description: string;
+  key: string;
+  value: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface UpdateSystemSettingRequest {
+  name?: string;
+  description?: string;
+  value: string;
+}
+
+export type SystemSettingsResponse = SystemSetting[];

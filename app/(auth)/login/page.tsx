@@ -4,7 +4,6 @@ import AuthLayout from '@/components/layouts/auth-layout';
 import LoginForm from '@/components/auth/LoginForm';
 import { Metadata } from 'next';
 
-// Since AuthLayout is now a client component, we can keep metadata here
 export const metadata: Metadata = {
   title: 'Login | Elan Admin',
   description: 'Sign in to your Elan admin account',
@@ -13,7 +12,6 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <AuthLayout
-      // Main Content
       title="Welcome Back!"
       subtitle="Connect to your Elan admin account"
       
@@ -28,7 +26,7 @@ export default function LoginPage() {
       heroLogoClassName="h-12 w-fit"
       
       // Hero Section Configuration
-      heroImage="/hero/cta-image.png"
+      heroImage="/hero/cta-image.jpg"
       heroTitle=""
       heroSubtitle=""
       heroFeatures={[
@@ -49,8 +47,8 @@ export default function LoginPage() {
       showHeroImage={true}
       
       // Styling Options
-      heroGradientFrom="from-green-950"
-      heroGradientTo="to-green-600"
+      heroGradientFrom="from-black"
+      heroGradientTo="to-transparent"
       heroImageOpacity="opacity-100"
       footerText="© 2025 Elan Road Test Rental. All rights reserved."
     >
