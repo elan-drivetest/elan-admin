@@ -201,7 +201,7 @@ export default function CustomersTable({
               </TableHeader>
               <TableBody>
                 {data.map((customer) => (
-                  <TableRow key={customer.id} className="hover:bg-gray-50">
+                  <TableRow key={customer.id} onClick={() => handleViewDetails(customer.id)} className="hover:bg-gray-50 hover:cursor-pointer">
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">

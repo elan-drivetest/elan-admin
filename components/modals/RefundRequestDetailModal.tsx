@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useRefundDetail, useUpdateRefund } from '@/hooks/useRefunds';
 import type { RefundStatus } from '@/types/refund';
+import CustomerDetailModal from './CustomerDetailModal';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
@@ -55,6 +56,7 @@ export default function RefundRequestDetailModal({
   const [editStatus, setEditStatus] = useState<RefundStatus>('pending');
   const [editPercentage, setEditPercentage] = useState(100);
   const [editNotes, setEditNotes] = useState('');
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
 
   // Initialize edit form when refund data loads
   useEffect(() => {
@@ -300,11 +302,14 @@ export default function RefundRequestDetailModal({
                     </div>
                   )}
                   <div className="pt-2">
-                    <Link href={`/customers?id=${refund.customer_id}`}>
-                      <Button variant="outline" size="sm" className="w-full">
-                        View Customer Profile
-                      </Button>
-                    </Link>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setIsCustomerModalOpen(true)}
+                    >
+                      View Customer Profile
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -529,6 +534,13 @@ export default function RefundRequestDetailModal({
           </div>
         )}
       </DialogContent>
+
+      {/* Customer Detail Modal */}
+      <CustomerDetailModal
+        isOpen={isCustomerModalOpen}
+        onClose={() => setIsCustomerModalOpen(false)}
+        customerId={refund?.customer_id?.toString() || null}
+      />
     </Dialog>
   );
 }

@@ -262,9 +262,11 @@ export default function CustomerDetailModal({
                   <div className="space-y-4">
                     <div className="flex items-center gap-4">
                       {customer.photo_url ? (
-                        <Image 
-                          src={customer.photo_url} 
+                        <Image
+                          src={customer.photo_url}
                           alt={customer.full_name}
+                          width={64}
+                          height={64}
                           className="w-16 h-16 rounded-full object-cover border-2 border-gray-200"
                         />
                       ) : (

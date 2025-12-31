@@ -18,6 +18,7 @@ import {
 import { TableSkeleton } from '@/components/ui/loading-state';
 import InstructorDetailModal from '@/components/modals/InstructorDetailModal';
 import type { AdminInstructor, AdminInstructorsParams } from '@/types/admin';
+import { cn } from '@/lib/utils';
 
 interface InstructorsTableProps {
   title: string;
@@ -180,7 +181,7 @@ export default function InstructorsTable({
                   </TableRow>
                 ) : (
                   data.map((instructor, index) => (
-                    <TableRow key={instructor.id || index} className={!isActiveInstructor(instructor) ? 'opacity-75' : ''}>
+                    <TableRow key={instructor.id || index} onClick={() => handleViewDetails(instructor.id)} className={cn(!isActiveInstructor(instructor) ? 'opacity-75' : '', 'hover:cursor-pointer')}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isActiveInstructor(instructor) ? 'bg-primary' : 'bg-gray-400'}`}>

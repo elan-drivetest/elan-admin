@@ -177,7 +177,7 @@ export default function RefundRequestsTable({
             </TableHeader>
             <TableBody>
               {data.map((refund) => (
-                <TableRow key={refund.id ?? refund.booking_id} className="hover:bg-gray-50">
+                <TableRow key={refund.id ?? refund.booking_id} onClick={() => onRowClick?.(refund)} className="hover:bg-gray-50 hover:cursor-pointer">
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Receipt className="w-4 h-4 text-blue-500" />

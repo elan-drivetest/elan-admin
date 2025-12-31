@@ -185,7 +185,7 @@ export default function BookingsTable({
                     </TableRow>
                   ) : (
                     filteredData.map((booking) => (
-                      <TableRow key={booking.id} className="hover:bg-gray-50">
+                      <TableRow key={booking.id} onClick={() => handleViewDetails(booking)} className="hover:bg-gray-50 hover:cursor-pointer">
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">

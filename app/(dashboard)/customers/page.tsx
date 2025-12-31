@@ -8,7 +8,7 @@ import CustomersTable from '@/components/tables/CustomersTable';
 import LoadingState, { CardSkeleton, TableSkeleton } from '@/components/ui/loading-state';
 import ErrorBoundary from '@/components/ui/error-boundary';
 import { useCustomers } from '@/hooks/useAdmin';
-import { Users, Car, CheckCircle, XCircle } from 'lucide-react';
+import { Users, Car, CheckCircle } from 'lucide-react';
 import type { AdminCustomersParams } from '@/types/admin';
 
 export default function CustomersPage() {
