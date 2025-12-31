@@ -444,6 +444,14 @@ export interface AdminRideSessionDetail extends AdminRideSession {
   instructorContact: string;
   instructorPayments: number;
   routePoints: RoutePoint[];
+  routeImageUrl?: string | null;
+  status?: string;
+  endTime?: string;
+}
+
+export interface RegenerateRouteImageResponse {
+  routeImageUrl: string;
+  message?: string;
 }
 
 export interface AdminRideSessionsParams extends PaginationParams {
@@ -459,6 +467,8 @@ export type AdminRideSessionsResponse = AdminRideSession[];
 export type AdminRideSessionDetailResponse = AdminRideSessionDetail;
 
 // Referral Code types
+export type ReferralCodeStatus = 'active' | 'claimed' | 'pending_payment' | 'partially_paid' | 'fully_paid' | 'expired';
+
 export interface AdminReferralCode {
   id: number;
   instructor_id: number;
@@ -466,7 +476,9 @@ export interface AdminReferralCode {
   amount: number;
   min_rides_required: number;
   used_by_instructor_id?: number;
-  status: 'active' | 'claimed' | 'pending_payment' | 'partially_paid' | 'fully_paid' | 'expired';
+  referral_type?: 'instructor' | 'admin';
+  created_by_admin_id?: number;
+  status: ReferralCodeStatus;
   used_at?: string;
   rides_completed_count: number;
   referrer_paid: number;
@@ -478,11 +490,17 @@ export interface AdminReferralCode {
 }
 
 export interface AdminReferralCodesParams extends PaginationParams {
-  status?: 'active' | 'claimed' | 'pending_payment' | 'partially_paid' | 'fully_paid' | 'expired';
+  status?: ReferralCodeStatus;
+}
+
+export interface CreateReferralCodeRequest {
+  code: string;
+  amount: number; // Amount in cents
+  min_rides_required: number;
 }
 
 export interface UpdateReferralCodeStatusRequest {
-  status: 'active' | 'claimed' | 'pending_payment' | 'partially_paid' | 'fully_paid' | 'expired';
+  status: ReferralCodeStatus;
 }
 
 export type AdminReferralCodesResponse = AdminReferralCode[];
@@ -594,15 +612,20 @@ export interface TestCenter {
   city: string;
   province: string;
   postal_code: string;
-  lat: number;
-  lng: number;
+  lat: number | string; // API may return as string
+  lng: number | string; // API may return as string
   base_price: number; // Amount in cents
-  status: 'ACTIVE' | 'INACTIVE';
-  created_at: string;
-  updated_at: string;
 }
 
 export type TestCentersResponse = TestCenter[];
+
+// Update Test Center request
+export interface UpdateTestCenterRequest {
+  province?: string;
+  city?: string;
+  address?: string;
+  base_price?: number; // Amount in cents
+}
 
 // File Upload types
 export interface FileUploadResponse {
@@ -695,3 +718,66 @@ export interface UpdateSystemSettingRequest {
 }
 
 export type SystemSettingsResponse = SystemSetting[];
+
+// Admin All Users types
+export type AdminUserStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'DELETED';
+export type AdminUserType = 'admin' | 'customer' | 'instructor';
+
+export interface AdminUser {
+  id: number;
+  full_name: string;
+  email: string;
+  phone_number: string;
+  user_type: AdminUserType;
+  status: AdminUserStatus;
+  provider: string;
+  created_at: string;
+  updated_at: string;
+  email_verified_at: string | null;
+  deleted_at: string | null;
+}
+
+export interface AdminAllUsersParams extends PaginationParams {
+  fullName?: string;
+  email?: string;
+  phoneNumber?: string;
+  status?: AdminUserStatus;
+}
+
+export type AdminAllUsersResponse = AdminUser[];
+
+export interface UpdateUserStatusRequest {
+  status: AdminUserStatus;
+}
+
+export interface UpdateUserStatusResponse {
+  id: number;
+  identifier: string;
+  email: string;
+  full_name: string;
+  provider: string;
+  phone_number: string;
+  address: string;
+  user_type: AdminUserType;
+  stripe_customer_id: string;
+  status: AdminUserStatus;
+  photo_url: string;
+  email_verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  created_by: number;
+}
+
+// Test Result types
+export type TestResult = 'PASS' | 'FAIL';
+
+export interface UpdateTestResultRequest {
+  test_result: TestResult;
+}
+
+export interface UpdateTestResultResponse extends AdminBooking {
+  email?: string;
+  total_ride_hour?: number;
+  ride_price?: number;
+}

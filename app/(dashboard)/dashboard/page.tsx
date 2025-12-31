@@ -106,7 +106,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <BookingsTable 
+          <BookingsTable
             title="Recent Bookings"
             data={transformedBookings}
             onAssignInstructor={(bookingId) => {
@@ -114,6 +114,7 @@ export default function DashboardPage() {
               setIsAssignModalOpen(true);
             }}
             isLoading={bookingsLoading && recentBookings.length === 0}
+            onRefresh={() => refetchRecentBookings()}
           />
 
           {!bookingsLoading && recentBookings.length === 0 && (

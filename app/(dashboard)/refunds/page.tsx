@@ -46,7 +46,9 @@ export default function RefundsPage() {
   };
 
   const handleRowClick = (refund: RefundRequest) => {
-    setSelectedRefundId(refund.id);
+    // Use id if available, otherwise fallback to booking_id
+    const refundIdentifier = refund.id ?? refund.booking_id;
+    setSelectedRefundId(refundIdentifier);
     setIsDetailModalOpen(true);
   };
 

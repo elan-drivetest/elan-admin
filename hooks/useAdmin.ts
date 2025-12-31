@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { adminService } from '@/services/admin';
-import type { 
+import type {
   AdminCustomersResponse,
   AdminInstructorsResponse,
   AdminCustomerDetailResponse,
@@ -30,8 +30,14 @@ import type {
   AdminCouponUsageParams,
   AdminCouponUsageResponse,
   TestCentersResponse,
+  TestCenter,
+  UpdateTestCenterRequest,
   AddonsResponse,
-  SystemSettingsResponse
+  SystemSettingsResponse,
+  AdminAllUsersResponse,
+  AdminAllUsersParams,
+  AdminUserStatus,
+  TestResult
 } from '@/types/admin';
 
 export function useRecentBookings(params?: AdminBookingsParams) {
@@ -674,14 +680,42 @@ export function useTestCenters() {
     return data.find(center => center.id === id) || null;
   }, [data]);
 
-  return { 
-    data, 
-    isLoading, 
-    error, 
+  return {
+    data,
+    isLoading,
+    error,
     refetch: fetchTestCenters,
     getCenterById,
     centers: data // Alias for consistency
   };
+}
+
+export function useUpdateTestCenter() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const updateTestCenter = useCallback(async (
+    id: number,
+    data: UpdateTestCenterRequest
+  ): Promise<TestCenter | null> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.updateTestCenter(id, data);
+      return response;
+    } catch (err: any) {
+      console.error('Update test center error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to update test center',
+        code: 'UPDATE_TEST_CENTER_ERROR'
+      });
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  return { updateTestCenter, isLoading, error };
 }
 
 export function useAddons() {
@@ -816,4 +850,89 @@ export function useSystemSettings() {
   }, []);
 
   return { data, isLoading, error, refetch: fetchSystemSettings };
+}
+
+// Hook for fetching all users (admin, customer, instructor)
+export function useAllUsers(params?: AdminAllUsersParams) {
+  const [data, setData] = useState<AdminAllUsersResponse>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchAllUsers = async (newParams?: AdminAllUsersParams) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getAllUsers(newParams || params);
+      setData(Array.isArray(response) ? response : []);
+    } catch (err: any) {
+      console.error('All users fetch error:', err);
+      setError({
+        message: err?.response?.data?.message || 'Failed to fetch users',
+        code: 'FETCH_ALL_USERS_ERROR'
+      });
+      setData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllUsers();
+  }, []);
+
+  return { data, isLoading, error, refetch: fetchAllUsers };
+}
+
+// Hook for updating user status
+export function useUpdateUserStatus() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const updateStatus = async (userId: number, status: AdminUserStatus) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.updateUserStatus(userId, { status });
+      return response;
+    } catch (err: any) {
+      console.error('Update user status error:', err);
+      const apiError: ApiError = {
+        message: err?.response?.data?.message || 'Failed to update user status',
+        code: 'UPDATE_USER_STATUS_ERROR'
+      };
+      setError(apiError);
+      throw apiError;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return { updateStatus, isLoading, error };
+}
+
+// Hook for updating booking test result
+export function useUpdateTestResult() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const updateTestResult = async (bookingId: number, testResult: TestResult) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.updateBookingTestResult(bookingId, { test_result: testResult });
+      return response;
+    } catch (err: any) {
+      console.error('Update test result error:', err);
+      const apiError: ApiError = {
+        message: err?.response?.data?.message || 'Failed to update test result',
+        code: 'UPDATE_TEST_RESULT_ERROR'
+      };
+      setError(apiError);
+      throw apiError;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return { updateTestResult, isLoading, error };
 }

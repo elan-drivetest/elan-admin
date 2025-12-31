@@ -46,13 +46,15 @@ interface BookingsTableProps {
   data: BookingTableData[];
   isLoading?: boolean;
   onAssignInstructor?: (bookingId: string) => void;
+  onRefresh?: () => void;
 }
 
-export default function BookingsTable({ 
-  title, 
-  data, 
+export default function BookingsTable({
+  title,
+  data,
   isLoading = false,
-  onAssignInstructor
+  onAssignInstructor,
+  onRefresh
 }: BookingsTableProps) {
   const [showTransferredOnly, setShowTransferredOnly] = useState(false);
   const [showInstructorAttachedOnly, setShowInstructorAttachedOnly] = useState(false);
@@ -282,6 +284,7 @@ export default function BookingsTable({
           isOpen={isDetailModalOpen}
           onClose={() => setIsDetailModalOpen(false)}
           booking={selectedBooking}
+          onBookingUpdate={onRefresh}
         />
       </>
     </ErrorBoundary>

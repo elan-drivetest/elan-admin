@@ -62,7 +62,10 @@ export default function ProcessRefundForm({ refund, onSuccess, onCancel }: Proce
     try {
       setError(null);
 
-      const result = await updateRefund(refund.id, {
+      // Use id if available, otherwise fallback to booking_id
+      const refundIdentifier = refund.id ?? refund.booking_id;
+
+      const result = await updateRefund(refundIdentifier, {
         status: data.status,
         refund_percentage: data.refund_percentage,
         admin_notes: data.admin_notes || undefined,

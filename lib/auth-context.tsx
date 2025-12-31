@@ -13,8 +13,7 @@ type AuthAction =
   | { type: 'LOGOUT' }
   | { type: 'SET_USER'; payload: User }
   | { type: 'CLEAR_ERROR' }
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SESSION_EXPIRED' };
+  | { type: 'SET_LOADING'; payload: boolean };
 
 const initialState: AuthState = {
   user: null,
@@ -45,7 +44,6 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         error: action.payload,
       };
     case 'LOGOUT':
-    case 'SESSION_EXPIRED':
       return {
         ...initialState,
         isLoading: false,
@@ -85,47 +83,38 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const router = useRouter();
 
-  const handleSessionExpiry = () => {
-    dispatch({ type: 'SESSION_EXPIRED' });
-    authService.clearAuthData();
-    router.push('/login');
-  };
-
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        // Check if we have cached user data
         const { user: cachedUser } = authService.getAuthData();
-        
+
         if (cachedUser) {
-          try {
-            const currentUser = await authService.getCurrentUser();
-            dispatch({ type: 'SET_USER', payload: currentUser });
-            authService.setAuthData({
-              user: currentUser,
-              token: 'cookie-based',
-              refreshToken: 'cookie-based',
-              expiresIn: 0,
-            });
-          } catch (error: any) {
-            if (error?.response?.status === 401) {
-              handleSessionExpiry();
-            } else {
-              authService.clearAuthData();
-              dispatch({ type: 'LOGOUT' });
-            }
-          }
-        } else {
-          try {
-            const currentUser = await authService.getCurrentUser();
-            dispatch({ type: 'SET_USER', payload: currentUser });
-            authService.setAuthData({
-              user: currentUser,
-              token: 'cookie-based',
-              refreshToken: 'cookie-based',
-              expiresIn: 0,
-            });
-          } catch (error) {
+          // Optimistically set the cached user while we validate
+          dispatch({ type: 'SET_USER', payload: cachedUser });
+        }
+
+        // Try to get current user from API
+        // The axios interceptor will automatically handle token refresh if needed
+        try {
+          const currentUser = await authService.getCurrentUser();
+          dispatch({ type: 'SET_USER', payload: currentUser });
+          authService.setAuthData({
+            user: currentUser,
+            token: 'cookie-based',
+            refreshToken: 'cookie-based',
+            expiresIn: 0,
+          });
+        } catch (error: any) {
+          // If we get here, the interceptor already tried to refresh and failed
+          // This means the user truly needs to log in again
+          if (!cachedUser) {
+            // Only set loading to false if we didn't have cached user
             dispatch({ type: 'SET_LOADING', payload: false });
+          } else {
+            // Clear the cached user since session is invalid
+            authService.clearAuthData();
+            dispatch({ type: 'LOGOUT' });
           }
         }
       } catch (error) {
@@ -136,16 +125,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     initializeAuth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = async (credentials: LoginCredentials) => {
     try {
       dispatch({ type: 'LOGIN_START' });
-      
+
       const authResponse = await authService.login(credentials);
       authService.setAuthData(authResponse);
-      
+
       dispatch({
         type: 'LOGIN_SUCCESS',
         payload: {
@@ -157,13 +145,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       router.push('/dashboard');
     } catch (error: any) {
       const authError: AuthError = {
-        message: error?.response?.data?.message || 
-                error?.message || 
-                'Login failed. Please check your credentials and try again.',
+        message: error?.response?.data?.message ||
+          error?.message ||
+          'Login failed. Please check your credentials and try again.',
         code: error?.response?.data?.code || 'LOGIN_ERROR',
         field: error?.response?.data?.field,
       };
-      
+
       dispatch({ type: 'LOGIN_ERROR', payload: authError });
     }
   };
@@ -200,7 +188,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       dispatch({ type: 'SET_LOADING', payload: true });
       const authResponse = await authService.refreshToken();
       authService.setAuthData(authResponse);
-      
+
       dispatch({
         type: 'LOGIN_SUCCESS',
         payload: {
@@ -210,13 +198,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
     } catch (error: any) {
       console.error('Token refresh error:', error);
-      if (error?.response?.status === 401) {
-        handleSessionExpiry();
-      } else {
-        authService.clearAuthData();
-        dispatch({ type: 'LOGOUT' });
-        router.push('/login');
-      }
+      authService.clearAuthData();
+      dispatch({ type: 'LOGOUT' });
+      router.push('/login');
     }
   };
 

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { DollarSign, Search, RefreshCw, Calendar, Receipt, User } from 'lucide-react';
+import { DollarSign, Search, RefreshCw, Calendar, Receipt, User, FileText } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -56,13 +56,16 @@ export default function RefundRequestsTable({
   };
 
   const getStatusBadge = (status: RefundStatus) => {
-    const statusConfig = {
+    const statusConfig: Record<RefundStatus, { bg: string; text: string; label: string }> = {
       pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pending' },
       approved: { bg: 'bg-green-100', text: 'text-green-800', label: 'Approved' },
       rejected: { bg: 'bg-red-100', text: 'text-red-800', label: 'Rejected' },
+      completed: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Completed' },
+      processing: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Processing' },
+      failed: { bg: 'bg-red-200', text: 'text-red-900', label: 'Failed' },
     };
 
-    const config = statusConfig[status];
+    const config = statusConfig[status] || { bg: 'bg-gray-100', text: 'text-gray-800', label: status };
     return <Badge className={`${config.bg} ${config.text}`}>{config.label}</Badge>;
   };
 
@@ -136,6 +139,9 @@ export default function RefundRequestsTable({
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
+              <option value="completed">Completed</option>
+              <option value="processing">Processing</option>
+              <option value="failed">Failed</option>
             </select>
             <Button onClick={handleSearch} disabled={isLoading}>
               Search
@@ -160,11 +166,10 @@ export default function RefundRequestsTable({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Refund ID</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Booking ID</TableHead>
+                <TableHead>Booking</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Refund %</TableHead>
+                <TableHead>Reason</TableHead>
                 <TableHead>Request Date</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
@@ -172,19 +177,7 @@ export default function RefundRequestsTable({
             </TableHeader>
             <TableBody>
               {data.map((refund) => (
-                <TableRow key={refund.id} className="hover:bg-gray-50 cursor-pointer">
-                  <TableCell>
-                    <span className="font-mono text-sm">#{refund.id}</span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium text-sm">{refund.customer_name}</span>
-                      </div>
-                      <span className="text-xs text-gray-500 mt-1">{refund.customer_email}</span>
-                    </div>
-                  </TableCell>
+                <TableRow key={refund.id ?? refund.booking_id} className="hover:bg-gray-50">
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Receipt className="w-4 h-4 text-blue-500" />
@@ -201,6 +194,14 @@ export default function RefundRequestsTable({
                     <Badge variant="outline" className="font-mono">
                       {refund.refund_percentage}%
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1 max-w-[200px]">
+                      <FileText className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                      <span className="text-sm text-gray-600 truncate" title={refund.refund_reason || 'No reason'}>
+                        {refund.refund_reason || <span className="text-gray-400 italic">No reason</span>}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1 text-sm">

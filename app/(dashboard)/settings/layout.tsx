@@ -4,7 +4,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChevronRight, Home, Cog, Users, Gift, TableConfig } from 'lucide-react';
+import { ChevronRight, Home, Cog, Users, Gift, TableConfig, MapPin } from 'lucide-react';
 import DashboardHeader from '@/components/layouts/DashboardHeader';
 
 interface SettingsLayoutProps {
@@ -48,28 +48,32 @@ const SettingsBreadcrumb = () => {
      
      if (segments.includes('coupons')) {
        items.push({ label: 'Coupons', href: '/settings/coupons', icon: Gift });
-       
+
        if (segments.includes('create')) {
          items.push({ label: 'Create Coupon', href: '/settings/coupons/create' });
        }
-       
+
        if (segments.includes('expired')) {
          items.push({ label: 'Expired Coupons', href: '/settings/coupons/expired' });
        }
-       
+
        if (segments.includes('usage') && !segments.some(s => !isNaN(Number(s)))) {
          items.push({ label: 'Usage Analytics', href: '/settings/coupons/usage' });
        }
-       
+
        const couponIdIndex = segments.findIndex(s => s === 'coupons') + 1;
        const couponId = segments[couponIdIndex];
        if (couponId && !isNaN(Number(couponId))) {
          items.push({ label: `Coupon #${couponId}`, href: `/settings/coupons/${couponId}` });
-         
+
          if (segments.includes('usage')) {
            items.push({ label: 'Usage Details', href: `/settings/coupons/${couponId}/usage` });
          }
        }
+     }
+
+     if (segments.includes('test-centers')) {
+       items.push({ label: 'Test Centers', href: '/settings/test-centers', icon: MapPin });
      }
    }
 
@@ -132,7 +136,14 @@ const SettingsBreadcrumb = () => {
        subtitle: 'Track coupon usage across all bookings.'
      };
    }
-   
+
+   if (pathname === '/settings/test-centers') {
+     return {
+       title: 'Test Centers',
+       subtitle: 'Manage drive test center locations and pricing.'
+     };
+   }
+
    if (pathname.startsWith('/settings/referral-codes/') && pathname !== '/settings/referral-codes') {
      const codeId = pathname.split('/').pop();
      return {
@@ -235,7 +246,14 @@ const SettingsHeader = () => {
        subtitle: 'Manage discount coupons and promotional codes.'
      };
    }
-   
+
+   if (pathname === '/settings/test-centers') {
+     return {
+       title: 'Test Centers',
+       subtitle: 'Manage drive test center locations and pricing.'
+     };
+   }
+
    return {
      title: 'Settings',
      subtitle: 'Manage system configuration and preferences.'

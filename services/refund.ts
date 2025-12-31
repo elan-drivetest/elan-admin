@@ -1,30 +1,10 @@
-import axios from "axios";
+import { apiClient } from "@/lib/axios";
 import {
   RefundRequest,
   RefundRequestsResponse,
   GetRefundRequestsParams,
   UpdateRefundRequestPayload,
 } from "@/types/refund";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "https://api-dev.elanroadtestrental.ca/v1";
-
-const refundApi = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true,
-});
-
-// Response interceptor for handling errors
-refundApi.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      window.location.href = "/login";
-    }
-    return Promise.reject(error);
-  }
-);
 
 export const refundService = {
   /**
@@ -33,7 +13,7 @@ export const refundService = {
   getRefundRequests: async (
     params?: GetRefundRequestsParams
   ): Promise<RefundRequestsResponse> => {
-    const response = await refundApi.get<RefundRequestsResponse>(
+    const response = await apiClient.get<RefundRequestsResponse>(
       "/admin/refund-requests",
       { params }
     );
@@ -44,7 +24,7 @@ export const refundService = {
    * Get refund request by ID
    */
   getRefundRequestById: async (id: number): Promise<RefundRequest> => {
-    const response = await refundApi.get<RefundRequest>(
+    const response = await apiClient.get<RefundRequest>(
       `/admin/refund-requests/${id}`
     );
     return response.data;
@@ -57,7 +37,7 @@ export const refundService = {
     id: number,
     payload: UpdateRefundRequestPayload
   ): Promise<RefundRequest> => {
-    const response = await refundApi.patch<RefundRequest>(
+    const response = await apiClient.patch<RefundRequest>(
       `/admin/refund-requests/${id}`,
       payload
     );

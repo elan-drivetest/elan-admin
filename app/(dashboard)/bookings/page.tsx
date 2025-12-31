@@ -325,7 +325,7 @@ export default function BookingsPage() {
           </div>
 
           {/* All Bookings Table */}
-          <EnhancedBookingsTable 
+          <EnhancedBookingsTable
             title={`All Bookings (${transformedBookings.length})`}
             data={transformedBookings}
             showCreateButton={false}
@@ -334,6 +334,7 @@ export default function BookingsPage() {
               setSelectedBookingId(parseInt(bookingId));
               setIsAssignModalOpen(true);
             }}
+            onRefresh={() => refetch()}
           />
         </div>
 

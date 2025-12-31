@@ -49,14 +49,16 @@ interface EnhancedBookingsTableProps {
   showCreateButton?: boolean;
   isLoading?: boolean;
   onAssignInstructor?: (bookingId: string) => void;
+  onRefresh?: () => void;
 }
 
-export default function EnhancedBookingsTable({ 
-  title, 
+export default function EnhancedBookingsTable({
+  title,
   data,
   showCreateButton = false,
   isLoading = false,
-  onAssignInstructor
+  onAssignInstructor,
+  onRefresh
 }: EnhancedBookingsTableProps) {
   const [selectedBooking, setSelectedBooking] = useState<AdminBooking | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -323,6 +325,7 @@ export default function EnhancedBookingsTable({
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
         booking={selectedBooking}
+        onBookingUpdate={onRefresh}
       />
     </>
   );

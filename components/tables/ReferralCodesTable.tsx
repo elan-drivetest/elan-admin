@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { MoreVertical, Gift, Search, RefreshCw, Users, Calendar, DollarSign } from 'lucide-react';
+import { MoreVertical, Gift, Search, RefreshCw, Users, Calendar, DollarSign, Plus } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table';
 import { TableSkeleton } from '@/components/ui/loading-state';
 import ReferralCodeDetailModal from '@/components/modals/ReferralCodeDetailModal';
+import CreateReferralCodeModal from '@/components/modals/CreateReferralCodeModal';
 import type { AdminReferralCode, AdminReferralCodesParams } from '@/types/admin';
 
 interface ReferralCodesTableProps {
@@ -25,19 +26,22 @@ interface ReferralCodesTableProps {
   isLoading?: boolean;
   onSearch?: (params: Partial<AdminReferralCodesParams>) => void;
   onRefresh?: () => void;
+  onCreateSuccess?: () => void;
 }
 
-export default function ReferralCodesTable({ 
-  title, 
-  data, 
+export default function ReferralCodesTable({
+  title,
+  data,
   isLoading = false,
   onSearch,
-  onRefresh
+  onRefresh,
+  onCreateSuccess
 }: ReferralCodesTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedCodeId, setSelectedCodeId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const handleViewDetails = (codeId: number) => {
     setSelectedCodeId(codeId.toString());
@@ -80,10 +84,18 @@ export default function ReferralCodesTable({
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg font-semibold">{title}</CardTitle>
             <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => setIsCreateModalOpen(true)}
+                disabled={isLoading}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create Code
+              </Button>
               {onRefresh && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={onRefresh}
                   disabled={isLoading}
                 >
@@ -216,11 +228,20 @@ export default function ReferralCodesTable({
         </CardContent>
       </Card>
 
-      <ReferralCodeDetailModal 
+      <ReferralCodeDetailModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         codeId={selectedCodeId}
         onSuccess={() => onRefresh?.()}
+      />
+
+      <CreateReferralCodeModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={() => {
+          onCreateSuccess?.();
+          onRefresh?.();
+        }}
       />
     </>
   );

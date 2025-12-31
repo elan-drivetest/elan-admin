@@ -30,8 +30,8 @@ export function useDistanceCalculation(): UseDistanceCalculationReturn {
       const request: DistanceCalculationRequest = {
         pickupLat: pickup.lat,
         pickupLng: pickup.lng,
-        testCenterLat: testCenter.lat,
-        testCenterLng: testCenter.lng,
+        testCenterLat: parseFloat(String(testCenter.lat)),
+        testCenterLng: parseFloat(String(testCenter.lng)),
       };
 
       const response = await adminService.calculateDistance(request);
@@ -43,10 +43,10 @@ export function useDistanceCalculation(): UseDistanceCalculationReturn {
       
       // Fallback to local calculation
       const localDistance = bookingUtils.calculateDistanceLocal(
-        pickup.lat, 
-        pickup.lng, 
-        testCenter.lat, 
-        testCenter.lng
+        pickup.lat,
+        pickup.lng,
+        parseFloat(String(testCenter.lat)),
+        parseFloat(String(testCenter.lng))
       );
       setDistance(localDistance);
       return localDistance;

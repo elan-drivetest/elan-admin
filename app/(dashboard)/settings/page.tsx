@@ -4,9 +4,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  Users, 
-  UserPlus, 
+import {
+  Users,
+  UserPlus,
   ChevronRight,
   Gift,
   Cog,
@@ -16,7 +16,9 @@ import {
   Shield,
   Settings,
   Database,
-  TrendingUp
+  TrendingUp,
+  MapPin,
+  Building2
 } from 'lucide-react';
 import SystemSettingsSection from '@/components/sections/SystemSettingsSection';
 import { useSystemSettings } from '@/hooks/useAdmin';
@@ -54,6 +56,15 @@ const userManagementItems: SettingsItem[] = [
     iconColor: 'text-blue-600',
   },
   {
+    title: 'Test Centers',
+    description: 'Manage drive test center locations and pricing',
+    icon: Building2,
+    href: '/settings/test-centers',
+    action: 'Manage Centers',
+    iconBg: 'bg-orange-50',
+    iconColor: 'text-orange-600',
+  },
+  {
     title: 'Referral Codes',
     description: 'Manage instructor referral codes and track usage',
     icon: Gift,
@@ -74,34 +85,41 @@ const userManagementItems: SettingsItem[] = [
 ];
 
 const quickActions: QuickAction[] = [
- {
-   title: 'Create New Admin',
-   description: 'Add a new administrator to the system',
-   icon: UserPlus,
-   href: '/settings/admin-users/create',
-   color: 'bg-green-50/80 hover:bg-green-100/80 text-green-700 border border-emerald-500/20',
- },
- {
-   title: 'View All Admins',
-   description: 'Manage existing administrator accounts',
-   icon: UsersIcon,
-   href: '/settings/admin-users',
-   color: 'bg-blue-50/80 hover:bg-blue-100/80 text-blue-700 border border-blue-200/60',
- },
- {
-   title: 'View Referral Codes',
-   description: 'Manage instructor referral codes',
-   icon: Gift,
-   href: '/settings/referral-codes',
-   color: 'bg-emerald-50/80 hover:bg-emerald-100/80 text-emerald-700 border border-emerald-200/60',
- },
- {
-   title: 'Create Coupon',
-   description: 'Add new discount coupon & manage',
-   icon: Gift,
-   href: '/settings/coupons/create',
-   color: 'bg-violet-50/80 hover:bg-violet-100/80 text-violet-700 border border-violet-200/60',
- },
+  {
+    title: 'Create New Admin',
+    description: 'Add a new administrator to the system',
+    icon: UserPlus,
+    href: '/settings/admin-users/create',
+    color: 'bg-green-50/80 hover:bg-green-100/80 text-green-700 border border-emerald-500/20',
+  },
+  {
+    title: 'View All Admins',
+    description: 'Manage existing administrator accounts',
+    icon: UsersIcon,
+    href: '/settings/admin-users',
+    color: 'bg-blue-50/80 hover:bg-blue-100/80 text-blue-700 border border-blue-200/60',
+  },
+  {
+    title: 'Test Centers',
+    description: 'Manage drive test center locations',
+    icon: MapPin,
+    href: '/settings/test-centers',
+    color: 'bg-orange-50/80 hover:bg-orange-100/80 text-orange-700 border border-orange-200/60',
+  },
+  {
+    title: 'View Referral Codes',
+    description: 'Manage instructor referral codes',
+    icon: Gift,
+    href: '/settings/referral-codes',
+    color: 'bg-emerald-50/80 hover:bg-emerald-100/80 text-emerald-700 border border-emerald-200/60',
+  },
+  {
+    title: 'Create Coupon',
+    description: 'Add new discount coupon & manage',
+    icon: Gift,
+    href: '/settings/coupons/create',
+    color: 'bg-violet-50/80 hover:bg-violet-100/80 text-violet-700 border border-violet-200/60',
+  },
 ];
 
 const SettingsCard = ({ items, title }: { items: SettingsItem[], title: string }) => (

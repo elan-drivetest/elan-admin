@@ -1,22 +1,22 @@
-export type RefundStatus = "pending" | "approved" | "rejected";
+export type RefundStatus = "pending" | "approved" | "rejected" | "completed" | "processing" | "failed";
 
 export interface RefundRequest {
-  id: number;
+  id?: number; // Optional - list endpoint may not return this
   booking_id: number;
   customer_id: number;
-  customer_name: string;
-  customer_email: string;
-  customer_phone_number: string;
-  customer_address: string;
-  payment_transaction_id: number;
+  customer_name?: string; // Optional - list endpoint may not return this
+  customer_email?: string; // Optional - list endpoint may not return this
+  customer_phone_number?: string; // Optional - list endpoint may not return this
+  customer_address?: string; // Optional - list endpoint may not return this
+  payment_transaction_id?: number; // Optional - list endpoint may not return this
   amount: number;
   refund_percentage: number;
   request_date: string;
   status: RefundStatus;
   processed_at: string | null;
   stripe_refund_id: string | null;
-  refund_reason: string;
-  metadata: Record<string, any>;
+  refund_reason: string | null;
+  metadata: Record<string, any> | null;
   admin_notes: string | null;
   created_at: string;
   updated_at: string;
