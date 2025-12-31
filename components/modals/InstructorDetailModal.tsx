@@ -1,7 +1,7 @@
-// components/modals/InstructorDetailModal.tsx - Fix vehicle null checks
+// components/modals/InstructorDetailModal.tsx
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import {
 import { useInstructorById } from '@/hooks/useAdmin';
 import type { AdminInstructorDetail } from '@/types/admin';
 import Image from 'next/image';
+import FilePreviewerModal from './FilePreviewerModal';
 
 interface InstructorDetailModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export default function InstructorDetailModal({
   instructorId 
 }: InstructorDetailModalProps) {
   const { data: instructor, isLoading, error } = useInstructorById(instructorId);
+  const [previewFile, setPreviewFile] = useState<{ url: string; title: string } | null>(null);
 
   const formatPrice = (price: number) => `$${(price / 100).toFixed(2)} CAD`;
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', {
@@ -48,6 +50,7 @@ export default function InstructorDetailModal({
   if (!isOpen) return null;
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="min-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -158,13 +161,13 @@ export default function InstructorDetailModal({
                       </div>
                       <div className="flex gap-2 mt-2">
                         {instructor.vehicle.registration_doc_url && (
-                          <Button size="sm" variant="outline" onClick={() => window.open(instructor.vehicle.registration_doc_url, '_blank')}>
+                          <Button size="sm" variant="outline" onClick={() => setPreviewFile({ url: instructor.vehicle!.registration_doc_url!, title: 'Vehicle Registration' })}>
                             <FileText className="w-3 h-3 mr-1" />
                             Registration
                           </Button>
                         )}
                         {instructor.vehicle.insurance_doc_url && (
-                          <Button size="sm" variant="outline" onClick={() => window.open(instructor.vehicle.insurance_doc_url, '_blank')}>
+                          <Button size="sm" variant="outline" onClick={() => setPreviewFile({ url: instructor.vehicle!.insurance_doc_url!, title: 'Vehicle Insurance' })}>
                             <Shield className="w-3 h-3 mr-1" />
                             Insurance
                           </Button>
@@ -265,5 +268,14 @@ export default function InstructorDetailModal({
         )}
       </DialogContent>
     </Dialog>
+
+      {/* File Previewer Modal */}
+      <FilePreviewerModal
+        isOpen={!!previewFile}
+        onClose={() => setPreviewFile(null)}
+        fileUrl={previewFile?.url || null}
+        title={previewFile?.title || 'Document'}
+      />
+    </>
   );
 }

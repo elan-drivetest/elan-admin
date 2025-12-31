@@ -14,25 +14,18 @@ import {
   Calendar,
   DollarSign,
   Route,
-  Clock,
   Car,
   GraduationCap,
-  Navigation,
-  Gauge,
   Map,
   RefreshCw,
   ImageIcon,
   Loader2,
-  ExternalLink,
-  ChevronDown,
-  ChevronUp
+  ExternalLink
 } from 'lucide-react';
 import { useRideSessionDetail } from '@/hooks/useAdmin';
 import { adminService } from '@/services/admin';
 import { TableSkeleton } from '@/components/ui/loading-state';
 import { toast } from 'sonner';
-import type { RoutePoint } from '@/types/admin';
-
 interface RideSessionDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -47,7 +40,6 @@ export default function RideSessionDetailModal({
   const { data: session, isLoading, error, refetch } = useRideSessionDetail(sessionId || '');
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [routeImageUrl, setRouteImageUrl] = useState<string | null>(null);
-  const [showRoutePoints, setShowRoutePoints] = useState(false);
 
   // Sync route image URL from session data
   React.useEffect(() => {
@@ -91,31 +83,9 @@ export default function RideSessionDetailModal({
     });
   };
 
-  const RoutePointCard = ({ point, index }: { point: RoutePoint; index: number }) => (
-    <div className="p-3 border rounded-lg bg-gray-50">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700">Point #{index + 1}</span>
-        <Badge variant="outline" className="text-xs">
-          <Gauge className="w-3 h-3 mr-1" />
-          {point.speed.toFixed(1)} km/h
-        </Badge>
-      </div>
-      <div className="space-y-1 text-xs text-gray-600">
-        <div className="flex items-center gap-1">
-          <MapPin className="w-3 h-3" />
-          <span>{point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Clock className="w-3 h-3" />
-          <span>{new Date(point.timestamp).toLocaleTimeString()}</span>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="min-w-fit max-h-[90vh] overflow-y-auto">
+      <DialogContent className="min-w-7xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Route className="w-5 h-5 text-primary" />
@@ -139,262 +109,247 @@ export default function RideSessionDetailModal({
           </div>
         )}
 
-        {/* Session Data */}
+        {/* Session Data - Bento Grid Layout */}
         {session && !isLoading && (
-          <div className="space-y-6">
-            {/* Session Overview */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Customer & Instructor Info */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <User className="w-4 h-4 text-blue-600" />
-                    Participants
-                  </CardTitle>
+          <div className="space-y-4">
+            {/* Bento Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+
+              {/* Route Tracking - Large Featured Card (spans 2 cols, 2 rows) */}
+              <Card className="lg:col-span-2 lg:row-span-2 border-2 border-primary/20">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Map className="w-5 h-5 text-primary" />
+                      Route Tracking
+                      {session.routePoints && session.routePoints.length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {session.routePoints.length} points
+                        </Badge>
+                      )}
+                    </CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRegenerateRouteImage}
+                      disabled={isRegenerating || !session.routePoints || session.routePoints.length === 0}
+                      className="gap-1.5"
+                    >
+                      {isRegenerating ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3 h-3" />
+                          {routeImageUrl ? 'Regenerate' : 'Generate'}
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <h4 className="font-medium text-sm text-gray-700 mb-2">Customer</h4>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium">{session.userName}</span>
+                <CardContent>
+                  {routeImageUrl ? (
+                    <div className="relative group">
+                      <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden border bg-gray-50">
+                        <Image
+                          src={routeImageUrl}
+                          alt="Route Map"
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm">{session.userContact}</span>
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => window.open(routeImageUrl, '_blank')}
+                          className="gap-1 shadow-md"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          Full Size
+                        </Button>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="w-full aspect-[4/3] rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center gap-3">
+                      <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center">
+                        <ImageIcon className="w-7 h-7 text-gray-400" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-medium text-gray-600">No route map available</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {session.routePoints && session.routePoints.length > 0
+                            ? 'Click "Generate" to create a visual route'
+                            : 'No route points recorded'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-                  <div>
-                    <h4 className="font-medium text-sm text-gray-700 mb-2">Instructor</h4>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <GraduationCap className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium">{session.instructorName}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm">{session.instructorContact}</span>
-                      </div>
+              {/* Customer - Compact Card */}
+              <Card className="lg:col-span-1">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <User className="w-4 h-4 text-blue-600" />
+                    Customer
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="font-semibold text-base">{session.userName}</p>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Phone className="w-3 h-3" />
+                    <span>{session.userContact}</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Instructor - Compact Card */}
+              <Card className="lg:col-span-1">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <GraduationCap className="w-4 h-4 text-orange-600" />
+                    Instructor
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="font-semibold text-base">{session.instructorName}</p>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Phone className="w-3 h-3" />
+                    <span>{session.instructorContact}</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Session Info - Spans 2 cols */}
+              <Card className="lg:col-span-2">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <Car className="w-4 h-4 text-green-600" />
+                    Session Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">Test Type</span>
+                      <Badge variant="outline" className="font-medium">
+                        {session.testType}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">Status</span>
+                      <Badge className={
+                        session.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        session.status === 'active' ? 'bg-blue-100 text-blue-800' :
+                        session.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }>
+                        {session.status ? session.status.charAt(0).toUpperCase() + session.status.slice(1) : 'Unknown'}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">Test Center</span>
+                      <span className="text-sm font-medium text-right">{session.centerName}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">Duration</span>
+                      <span className="text-sm font-medium">{parseFloat(session.totalHours).toFixed(2)}h</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">Distance</span>
+                      <span className="text-sm font-medium">{parseFloat(session.totalDistance).toFixed(2)}km</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Session Details */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Car className="w-4 h-4 text-green-600" />
-                    Session Information
+              {/* Route Info - Spans 2 cols */}
+              <Card className="lg:col-span-2">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <MapPin className="w-4 h-4 text-purple-600" />
+                    Route Information
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Test Type:</span>
-                    <Badge variant="outline" className="font-medium">
-                      {session.testType}
-                    </Badge>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Test Center:</span>
-                    <span className="text-sm font-medium text-right max-w-[200px]">{session.centerName}</span>
-                  </div>
+                  <div className="flex items-stretch gap-3">
+                    {/* Pickup Location */}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pickup</span>
+                      </div>
+                      <p className="text-sm font-medium">{session.pickupLocation}</p>
+                    </div>
 
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm">{formatDateTime(session.testDate)}</span>
-                  </div>
+                    {/* Arrow connector */}
+                    <div className="flex flex-col items-center justify-center px-2 shrink-0">
+                      <div className="w-px h-2 bg-gray-300" />
+                      <div className="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center">
+                        <span className="text-gray-400 text-xs">→</span>
+                      </div>
+                      <div className="w-px h-2 bg-gray-300" />
+                    </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Duration:</span>
-                    <span className="text-sm font-medium">{session.totalHours}h</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Distance:</span>
-                    <span className="text-sm font-medium">{session.totalDistance}km</span>
+                    {/* Dropoff Location */}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Dropoff</span>
+                      </div>
+                      <p className="text-sm font-medium">{session.dropLocation}</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Financial - Spans 2 cols */}
+              <Card className="lg:col-span-2">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <DollarSign className="w-4 h-4 text-green-600" />
+                    Financial Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-end justify-between">
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between gap-8">
+                        <span className="text-gray-600">Total Price:</span>
+                        <span className="font-medium">{formatPrice(session.totalPrice)}</span>
+                      </div>
+                      <div className="flex justify-between gap-8">
+                        <span className="text-gray-600">Instructor:</span>
+                        <span className="font-medium">{formatPrice(session.instructorPayments)}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500">Platform Fee</p>
+                      <p className="text-2xl font-bold text-primary">{formatPrice(session.totalPrice - session.instructorPayments)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
             </div>
 
-            {/* Location Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <MapPin className="w-4 h-4 text-purple-600" />
-                  Route Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="font-medium text-sm text-gray-700 mb-2">Pickup Location</h4>
-                    <div className="flex items-start gap-2">
-                      <Navigation className="w-4 h-4 text-green-500 mt-0.5" />
-                      <span className="text-sm">{session.pickupLocation}</span>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-medium text-sm text-gray-700 mb-2">Dropoff Location</h4>
-                    <div className="flex items-start gap-2">
-                      <MapPin className="w-4 h-4 text-red-500 mt-0.5" />
-                      <span className="text-sm">{session.dropLocation}</span>
-                    </div>
-                  </div>
+            {/* Footer */}
+            <div className="pt-4 border-t border-gray-200">
+              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-gray-500">
+                <div className="flex items-center gap-4">
+                  <span>Test Date: <span className="font-medium text-gray-700">{formatDateTime(session.testDate)}</span></span>
+                  {session.endTime && (
+                    <span>End Time: <span className="font-medium text-gray-700">{formatDateTime(session.endTime)}</span></span>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Financial Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <DollarSign className="w-4 h-4 text-green-600" />
-                  Financial Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Total Price:</span>
-                  <span className="font-medium text-green-600">{formatPrice(session.totalPrice)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Instructor Earnings:</span>
-                  <span className="font-medium text-green-600">{formatPrice(session.instructorPayments)}</span>
-                </div>
-                <div className="border-t pt-2">
-                  <div className="flex justify-between text-lg font-semibold">
-                    <span>Platform Fee:</span>
-                    <span className="text-blue-600">{formatPrice(session.totalPrice - session.instructorPayments)}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Route Tracking */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Map className="w-4 h-4 text-indigo-600" />
-                    Route Tracking
-                    {session.routePoints && session.routePoints.length > 0 && (
-                      <Badge variant="secondary" className="ml-2">
-                        {session.routePoints.length} points
-                      </Badge>
-                    )}
-                  </CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRegenerateRouteImage}
-                    disabled={isRegenerating || !session.routePoints || session.routePoints.length === 0}
-                    className="gap-2"
-                  >
-                    {isRegenerating ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="w-4 h-4" />
-                        {routeImageUrl ? 'Regenerate Map' : 'Generate Map'}
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Route Map Image */}
-                {routeImageUrl ? (
-                  <div className="relative group">
-                    <div className="relative w-full aspect-[16/9] rounded-lg overflow-hidden border bg-gray-50">
-                      <Image
-                        src={routeImageUrl}
-                        alt="Route Map"
-                        fill
-                        className="object-contain"
-                        unoptimized
-                      />
-                    </div>
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => window.open(routeImageUrl, '_blank')}
-                        className="gap-1 shadow-md"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        Open Full Size
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-full aspect-[16/9] rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center gap-3">
-                    <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
-                      <ImageIcon className="w-8 h-8 text-gray-400" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-gray-600">No route map available</p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {session.routePoints && session.routePoints.length > 0
-                          ? 'Click "Generate Map" to create a visual route'
-                          : 'No route points recorded for this session'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Route Points Collapsible */}
-                {session.routePoints && session.routePoints.length > 0 && (
-                  <div className="border rounded-lg overflow-hidden">
-                    <button
-                      onClick={() => setShowRoutePoints(!showRoutePoints)}
-                      className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Route className="w-4 h-4 text-gray-500" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Route Points Data
-                        </span>
-                        <Badge variant="outline" className="text-xs">
-                          {session.routePoints.length} points
-                        </Badge>
-                      </div>
-                      {showRoutePoints ? (
-                        <ChevronUp className="w-4 h-4 text-gray-500" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4 text-gray-500" />
-                      )}
-                    </button>
-
-                    {showRoutePoints && (
-                      <div className="p-3 border-t">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-80 overflow-y-auto">
-                          {session.routePoints.map((point, index) => (
-                            <RoutePointCard key={index} point={point} index={index} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* No Route Points Message */}
-                {(!session.routePoints || session.routePoints.length === 0) && !routeImageUrl && (
-                  <div className="text-center py-4 text-gray-500">
-                    <p className="text-sm">No route tracking data available for this session</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                <span>Session ID: <span className="font-medium text-gray-700">#{session.id}</span></span>
+              </div>
+            </div>
           </div>
         )}
       </DialogContent>

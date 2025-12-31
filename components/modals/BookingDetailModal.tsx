@@ -35,6 +35,7 @@ import { toast } from 'sonner';
 import { useUpdateTestResult } from '@/hooks/useAdmin';
 import type { AdminBooking, TestResult } from '@/types/admin';
 import InstructorDetailModal from './InstructorDetailModal';
+import FilePreviewerModal from './FilePreviewerModal';
 import Image from 'next/image';
 
 interface BookingDetailModalProps {
@@ -53,6 +54,7 @@ export default function BookingDetailModal({
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [pendingResult, setPendingResult] = useState<TestResult | null>(null);
   const [isInstructorModalOpen, setIsInstructorModalOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{ url: string; title: string } | null>(null);
 
   const { updateTestResult, isLoading: isUpdating } = useUpdateTestResult();
 
@@ -387,7 +389,7 @@ export default function BookingDetailModal({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => window.open(booking.road_test_doc_url, '_blank')}
+                    onClick={() => setPreviewFile({ url: booking.road_test_doc_url!, title: 'Road Test Document' })}
                     className="w-full justify-between text-xs h-8"
                   >
                     <span className="flex items-center"><FileText className="w-3 h-3 mr-1" />Road Test</span>
@@ -400,7 +402,7 @@ export default function BookingDetailModal({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => window.open(booking.g1_license_doc_url, '_blank')}
+                    onClick={() => setPreviewFile({ url: booking.g1_license_doc_url!, title: 'G1 License Document' })}
                     className="w-full justify-between text-xs h-8"
                   >
                     <span className="flex items-center"><IdCard className="w-3 h-3 mr-1" />G1 License</span>
@@ -539,6 +541,14 @@ export default function BookingDetailModal({
         isOpen={isInstructorModalOpen}
         onClose={() => setIsInstructorModalOpen(false)}
         instructorId={booking?.instructor_id?.toString() || null}
+      />
+
+      {/* File Previewer Modal */}
+      <FilePreviewerModal
+        isOpen={!!previewFile}
+        onClose={() => setPreviewFile(null)}
+        fileUrl={previewFile?.url || null}
+        title={previewFile?.title || 'Document'}
       />
     </>
   );

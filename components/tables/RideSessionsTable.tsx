@@ -5,7 +5,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MoreVertical, User, MapPin, Calendar, DollarSign, Route, GraduationCap, RefreshCw } from 'lucide-react';
+import { MoreVertical, User, Calendar, Route, GraduationCap, RefreshCw, MapPin, ArrowRight } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -48,6 +48,39 @@ export default function RideSessionsTable({
     });
   };
 
+  const formatPickupDropoff = (session: AdminRideSession) => {
+    const isMeetAtCenter = session.pickupLocation?.toLowerCase().includes('meet at center') ||
+                           session.pickupLocation === session.dropoffLocation;
+
+    if (isMeetAtCenter) {
+      return (
+        <div className="flex items-center gap-2 text-sm">
+          <MapPin className="w-4 h-4 text-blue-500" />
+          <span className="font-medium text-blue-700">Meet at Test Center</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-1">
+        <div className="flex items-start gap-2 text-sm">
+          <MapPin className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-green-700">Pickup:</p>
+            <p className="text-xs text-gray-600 break-words">{session.pickupLocation || 'N/A'}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 ml-6">
+          <ArrowRight className="w-3 h-3 text-gray-400" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-gray-700">Dropoff:</p>
+            <p className="text-xs text-gray-600 break-words">{session.dropoffLocation || 'N/A'}</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card className="relative">
       <CardHeader>
@@ -86,7 +119,7 @@ export default function RideSessionsTable({
               <TableRow>
                 <TableHead>User name</TableHead>
                 <TableHead>Center Name</TableHead>
-                <TableHead>Pickup → Dropoff Location</TableHead>
+                <TableHead className="min-w-[200px]">Pickup → Dropoff Location</TableHead>
                 <TableHead>Date and time</TableHead>
                 <TableHead>Test Type</TableHead>
                 <TableHead>Total Price</TableHead>
@@ -99,7 +132,7 @@ export default function RideSessionsTable({
             </TableHeader>
             <TableBody>
               {data.map((session) => (
-                <TableRow key={session.id} className="hover:bg-gray-50">
+                <TableRow key={session.id} onClick={() => onViewDetails?.(session.id.toString())} className="hover:bg-gray-50 hover:cursor-pointer">
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
@@ -112,9 +145,7 @@ export default function RideSessionsTable({
                     <span className="text-sm">{session.centerName}</span>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm max-w-[200px]">
-                      <span className="truncate block">{session.pickupLocation} → {session.dropoffLocation}</span>
-                    </div>
+                    {formatPickupDropoff(session)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
@@ -129,7 +160,6 @@ export default function RideSessionsTable({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <DollarSign className="w-3 h-3 text-green-500" />
                       <span className="text-green-600 font-medium">{formatPrice(session.totalPrice)}</span>
                     </div>
                   </TableCell>
@@ -143,7 +173,6 @@ export default function RideSessionsTable({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <DollarSign className="w-3 h-3 text-green-500" />
                       <span className="text-green-600 font-medium">{formatPrice(session.instructorEarnings)}</span>
                     </div>
                   </TableCell>
