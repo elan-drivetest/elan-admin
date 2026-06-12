@@ -114,11 +114,11 @@ export function isInstructorAssignable(d: {
 } | null | undefined): boolean {
   return (
     !!d 
-    // will uncomment all these in production
-    // && d.status === 'ACTIVE' 
-    // && d.profile_completion_percentage === 100
-    // && d.stripe_payouts_enabled === true 
-    // && d.stripe_charges_enabled === true
+    // Instsructors Guard
+    && d.status === 'ACTIVE' 
+    && d.profile_completion_percentage === 100
+    && d.stripe_payouts_enabled === true 
+    && d.stripe_charges_enabled === true
   );
 }
 

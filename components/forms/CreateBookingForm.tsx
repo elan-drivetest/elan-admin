@@ -36,7 +36,7 @@ const createBookingSchema = z.object({
   pickup_latitude: z.number().optional(),
   pickup_longitude: z.number().optional(),
   pickup_distance: z.number().optional(),
-  instructor_id: z.number().optional(),
+  instructor_id: z.number().nullable().optional(),
   addon_id: z.number().optional(),
   coupon_code: z.string().optional(),
   // Backend requires both documents as valid URLs.
@@ -338,7 +338,7 @@ export default function CreateBookingForm({ onSuccess, onCancel }: CreateBooking
                   badge: instructor.rating ? `★ ${instructor.rating.toFixed(1)}` : undefined
                 }))}
                 value={watch('instructor_id') || null}
-                onSelect={(value) => setValue('instructor_id', value as number | undefined)}
+                onSelect={(value) => setValue('instructor_id', value === null ? undefined : (value as number), { shouldValidate: true })}
                 placeholder="Select an instructor (optional)"
                 required={false}
                 isLoading={instructorsLoading}
