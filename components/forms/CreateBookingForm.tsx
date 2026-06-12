@@ -55,6 +55,35 @@ interface CreateBookingFormProps {
   onCancel?: () => void;
 }
 
+// A titled card that groups related fields so the long booking form reads as a
+// short sequence of clear steps instead of one tall column.
+function FormSection({
+  step,
+  title,
+  description,
+  children,
+}: {
+  step: number;
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-start gap-3">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 text-sm font-semibold text-green-700">
+          {step}
+        </span>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+          {description && <p className="text-xs text-gray-500">{description}</p>}
+        </div>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
+
 export default function CreateBookingForm({ onSuccess, onCancel }: CreateBookingFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessages, setErrorMessages] = useState<string[]>([]);
@@ -243,142 +272,162 @@ export default function CreateBookingForm({ onSuccess, onCancel }: CreateBooking
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form - Left Column */}
         <div className="lg:col-span-2 space-y-6">
-          <form onSubmit={handleSubmit(onSubmitHandler)} className="space-y-6">
-            {/* Customer Selection */}
-            <SearchableSelect
-              label="Customer"
-              options={customers.map(customer => ({
-                id: customer.id,
-                label: customer.full_name,
-                subtitle: `${customer.email} • ${customer.contact}`
-              }))}
-              value={watch('user_id') || null}
-              onSelect={(value) => setValue('user_id', value as number)}
-              placeholder="Select a customer"
-              required={true}
-              isLoading={customersLoading}
-              allowClear={false}
-            />
-
-            {/* Test Center Selection */}
-            <div className="space-y-2">
-              <Label>Test Center *</Label>
-              <TestCenterDropdownAdmin
-                selectedCenter={selectedTestCenter}
-                onSelect={setSelectedTestCenter}
-                placeholder="Select a test center"
-              />
-              {errors.test_center_id && (
-                <p className="text-sm text-red-600">{errors.test_center_id.message}</p>
-              )}
-            </div>
-
-            {/* Test Type & Date */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Test Type *</Label>
-                <Select value={testType} onValueChange={(value: 'G2' | 'G') => setValue('test_type', value)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="G2">G2 Road Test</SelectItem>
-                    <SelectItem value="G">G Road Test</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="test_date">Test Date & Time *</Label>
-                <Input
-                  id="test_date"
-                  type="datetime-local"
-                  {...register('test_date')}
-                />
-                {errors.test_date && (
-                  <p className="text-sm text-red-600">{errors.test_date.message}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Location Selection */}
-            <LocationSelectionAdmin
-              selectedOption={locationOption}
-              onOptionChange={setLocationOption}
-              onLocationSelect={handleLocationSelect}
-              testCenter={selectedTestCenter || undefined}
-            />
-            {errors.pickup_address && (
-              <p className="text-sm text-red-600 -mt-3">{errors.pickup_address.message}</p>
-            )}
-
-            {/* Add-on Selection */}
-            <AddOnSelectionAdmin
-              addons={addons}
-              selectedAddon={selectedAddon}
-              onAddonSelect={setSelectedAddon}
-              testType={testType}
-              freePerks={freePerks}
-            />
-
-            {/* Coupon Application */}
-            <CouponVerificationAdmin
-              onCouponApply={setAppliedCoupon}
-              appliedCoupon={appliedCoupon}
-            />
-
-            {/* Instructor Selection */}
-            <div>
+          <form onSubmit={handleSubmit(onSubmitHandler)} className="space-y-5">
+            {/* Step 1 — Customer & test */}
+            <FormSection
+              step={1}
+              title="Customer & Test"
+              description="Who the booking is for and which road test."
+            >
               <SearchableSelect
-                label="Instructor (Optional)"
-                options={instructors.map(instructor => ({
-                  id: instructor.user_id,
-                  label: instructor.fullName,
-                  subtitle: instructor.phoneNumber,
-                  badge: instructor.rating ? `★ ${instructor.rating.toFixed(1)}` : undefined
+                label="Customer"
+                options={customers.map(customer => ({
+                  id: customer.id,
+                  label: customer.full_name,
+                  subtitle: `${customer.email} • ${customer.contact}`
                 }))}
-                value={watch('instructor_id') || null}
-                onSelect={(value) => setValue('instructor_id', value === null ? undefined : (value as number), { shouldValidate: true })}
-                placeholder="Select an instructor (optional)"
-                required={false}
-                isLoading={instructorsLoading}
-                allowClear={true}
+                value={watch('user_id') || null}
+                onSelect={(value) => setValue('user_id', value as number)}
+                placeholder="Select a customer"
+                required={true}
+                isLoading={customersLoading}
+                allowClear={false}
               />
-              {!instructorsLoading && instructors.length === 0 && (
-                <p className="text-xs text-gray-400 mt-1">
-                  No eligible instructors — only active, bank-connected instructors with a 100% complete profile can be assigned.
-                </p>
+
+              <div className="space-y-2">
+                <Label>Test Center *</Label>
+                <TestCenterDropdownAdmin
+                  selectedCenter={selectedTestCenter}
+                  onSelect={setSelectedTestCenter}
+                  placeholder="Select a test center"
+                />
+                {errors.test_center_id && (
+                  <p className="text-sm text-red-600">{errors.test_center_id.message}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Test Type *</Label>
+                  <Select value={testType} onValueChange={(value: 'G2' | 'G') => setValue('test_type', value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="G2">G2 Road Test</SelectItem>
+                      <SelectItem value="G">G Road Test</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="test_date">Test Date & Time *</Label>
+                  <Input
+                    id="test_date"
+                    type="datetime-local"
+                    {...register('test_date')}
+                  />
+                  {errors.test_date && (
+                    <p className="text-sm text-red-600">{errors.test_date.message}</p>
+                  )}
+                </div>
+              </div>
+            </FormSection>
+
+            {/* Step 2 — Pickup / meeting location */}
+            <FormSection
+              step={2}
+              title="Meeting Location"
+              description="Meet at the test center, or set a pickup address."
+            >
+              <LocationSelectionAdmin
+                selectedOption={locationOption}
+                onOptionChange={setLocationOption}
+                onLocationSelect={handleLocationSelect}
+                testCenter={selectedTestCenter || undefined}
+              />
+              {errors.pickup_address && (
+                <p className="text-sm text-red-600">{errors.pickup_address.message}</p>
               )}
-            </div>
+            </FormSection>
 
-            {/* Document Uploads */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Step 3 — Extras */}
+            <FormSection
+              step={3}
+              title="Add-ons, Promo & Instructor"
+              description="Optional lesson add-on, discount code, and instructor."
+            >
+              <AddOnSelectionAdmin
+                addons={addons}
+                selectedAddon={selectedAddon}
+                onAddonSelect={setSelectedAddon}
+                testType={testType}
+                freePerks={freePerks}
+              />
+
+              <CouponVerificationAdmin
+                onCouponApply={setAppliedCoupon}
+                appliedCoupon={appliedCoupon}
+              />
+
               <div>
-                <FileUploader
-                  label="Road Test Document"
-                  value={watch('road_test_doc_url') || ''}
-                  onUpload={(url) => setValue('road_test_doc_url', url, { shouldValidate: true })}
-                  acceptedTypes={['image/*', '.pdf']}
-                  required={true}
+                <SearchableSelect
+                  label="Instructor (Optional)"
+                  options={instructors.map(instructor => ({
+                    id: instructor.user_id,
+                    label: instructor.fullName,
+                    subtitle: instructor.phoneNumber,
+                    badge: instructor.rating ? `★ ${instructor.rating.toFixed(1)}` : undefined
+                  }))}
+                  value={watch('instructor_id') || null}
+                  onSelect={(value) => setValue('instructor_id', value === null ? undefined : (value as number), { shouldValidate: true })}
+                  placeholder="Select an instructor (optional)"
+                  required={false}
+                  isLoading={instructorsLoading}
+                  allowClear={true}
                 />
-                {errors.road_test_doc_url && (
-                  <p className="text-sm text-red-600 mt-1">{errors.road_test_doc_url.message}</p>
+                {!instructorsLoading && instructors.length === 0 && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    No eligible instructors — only active, bank-connected instructors with a 100% complete profile can be assigned.
+                  </p>
                 )}
               </div>
+            </FormSection>
 
-              <div>
-                <FileUploader
-                  label={`${testType} License Document`}
-                  value={watch('g1_license_doc_url') || ''}
-                  onUpload={(url) => setValue('g1_license_doc_url', url, { shouldValidate: true })}
-                  acceptedTypes={['image/*', '.pdf']}
-                  required={true}
-                />
-                {errors.g1_license_doc_url && (
-                  <p className="text-sm text-red-600 mt-1">{errors.g1_license_doc_url.message}</p>
-                )}
+            {/* Step 4 — Documents */}
+            <FormSection
+              step={4}
+              title="Documents"
+              description="Both documents are required to create the booking."
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <FileUploader
+                    label="Road Test Document"
+                    value={watch('road_test_doc_url') || ''}
+                    onUpload={(url) => setValue('road_test_doc_url', url, { shouldValidate: true })}
+                    acceptedTypes={['image/*', '.pdf']}
+                    required={true}
+                  />
+                  {errors.road_test_doc_url && (
+                    <p className="text-sm text-red-600 mt-1">{errors.road_test_doc_url.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <FileUploader
+                    label={`${testType} License Document`}
+                    value={watch('g1_license_doc_url') || ''}
+                    onUpload={(url) => setValue('g1_license_doc_url', url, { shouldValidate: true })}
+                    acceptedTypes={['image/*', '.pdf']}
+                    required={true}
+                  />
+                  {errors.g1_license_doc_url && (
+                    <p className="text-sm text-red-600 mt-1">{errors.g1_license_doc_url.message}</p>
+                  )}
+                </div>
               </div>
-            </div>
+            </FormSection>
 
             {/* Error Display */}
             <div ref={errorRef}>
@@ -386,7 +435,7 @@ export default function CreateBookingForm({ onSuccess, onCancel }: CreateBooking
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-3 pt-4">
+            <div className="flex items-center gap-3 pt-1">
               <Button
                 type="submit"
                 disabled={isLoading}
@@ -404,7 +453,7 @@ export default function CreateBookingForm({ onSuccess, onCancel }: CreateBooking
                   </>
                 )}
               </Button>
-              
+
               {onCancel && (
                 <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
                   <X className="mr-2 h-4 w-4" />

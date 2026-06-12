@@ -6,6 +6,7 @@ import { ChevronDown, Check, Search, X, MapPin, Loader2, AlertCircle, RefreshCw 
 import { cn } from '@/lib/utils';
 import { useTestCenters } from '@/hooks/useAdmin';
 import { bookingUtils } from '@/lib/utils/booking-calculations';
+import { getTestCenterStatusMap, isTestCenterActive } from '@/lib/utils/test-center-status';
 import type { TestCenter } from '@/types/admin';
 
 interface TestCenterDropdownAdminProps {
@@ -30,6 +31,11 @@ export default function TestCenterDropdownAdmin({
 
   const { data: centers, isLoading: loading, error, refetch } = useTestCenters();
 
+  // Guard: only active centres can be booked. Status isn't on the list endpoint,
+  // so resolve it from the shared (localStorage-backed) status map. Read once on
+  // mount — the dropdown remounts each time the booking modal opens.
+  const statusMap = useMemo(() => getTestCenterStatusMap(), []);
+
   // Optimized filtered and grouped centers
   const { filteredCenters, groupedCenters } = useMemo(() => {
     if (!centers || centers.length === 0) {
@@ -39,14 +45,15 @@ export default function TestCenterDropdownAdmin({
     const searchLower = searchTerm.toLowerCase();
     const filtered = centers.filter(center => {
       if (!center?.name) return false;
-      
+      if (!isTestCenterActive(center, statusMap)) return false;
+
       const searchableText = [
         center.name,
         center.city,
         center.province,
         center.address
       ].filter(Boolean).join(' ').toLowerCase();
-      
+
       return searchableText.includes(searchLower);
     });
 
@@ -69,7 +76,7 @@ export default function TestCenterDropdownAdmin({
     });
 
     return { filteredCenters: filtered, groupedCenters: grouped };
-  }, [centers, searchTerm]);
+  }, [centers, searchTerm, statusMap]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

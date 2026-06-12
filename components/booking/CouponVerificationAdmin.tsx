@@ -2,15 +2,15 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Check, X, Loader2, AlertCircle, Gift } from 'lucide-react';
+import { Check, X, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { adminService } from '@/services/admin';
 import { bookingUtils } from '@/lib/utils/booking-calculations';
 import { getApiErrorMessages } from '@/lib/utils';
-import type { CouponVerificationResponse } from '@/types/admin';
+import type { CouponVerificationResponse, AdminCoupon } from '@/types/admin';
 
 interface CouponVerificationAdminProps {
   onCouponApply?: (coupon: CouponVerificationResponse | null) => void;
@@ -18,150 +18,129 @@ interface CouponVerificationAdminProps {
   className?: string;
 }
 
+// The verification response and the coupon list row share the same shape, so a
+// selected coupon can be applied directly without a second verify round-trip.
+const toVerification = (c: AdminCoupon): CouponVerificationResponse => ({
+  id: c.id,
+  name: c.name,
+  description: c.description,
+  code: c.code,
+  discount: c.discount,
+  is_recurrent: c.is_recurrent,
+  is_failure_coupon: c.is_failure_coupon,
+  min_purchase_amount: c.min_purchase_amount,
+  start_date: c.start_date,
+  expires_at: c.expires_at,
+  created_at: c.created_at,
+  updated_at: c.updated_at,
+});
+
 export default function CouponVerificationAdmin({
   onCouponApply,
   appliedCoupon,
   className
 }: CouponVerificationAdminProps) {
-  const [couponCode, setCouponCode] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [coupons, setCoupons] = useState<AdminCoupon[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Pre-populate input if coupon is already applied
+  // Load the available coupons the admin can apply (active and not expired).
   useEffect(() => {
-    if (appliedCoupon) {
-      setCouponCode(appliedCoupon.code);
-    }
-  }, [appliedCoupon]);
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        // NOTE: only send is_active=true. The backend DTO coerces query booleans
+        // with Boolean(value), so is_expired=false would be read as TRUE and wrongly
+        // return only expired coupons. is_active=true already means started & not expired.
+        const { data } = await adminService.getCoupons({ limit: 100, is_active: true });
+        if (!cancelled) setCoupons(data);
+      } catch (err: any) {
+        if (!cancelled) setError(getApiErrorMessages(err).join(' '));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const handleVerifyCoupon = async () => {
-    if (!couponCode.trim()) {
-      setError('Please enter a coupon code');
+  const handleSelect = (value: number | string | null) => {
+    if (value === null) {
+      onCouponApply?.(null);
       return;
     }
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await adminService.verifyCouponForAdmin(couponCode.trim());
-      onCouponApply?.(response);
-    } catch (err: any) {
-      setError(getApiErrorMessages(err).join(' '));
-      onCouponApply?.(null);
-    } finally {
-      setLoading(false);
-    }
+    const coupon = coupons.find((c) => c.id === value);
+    onCouponApply?.(coupon ? toVerification(coupon) : null);
   };
 
   const handleRemoveCoupon = () => {
-    setCouponCode('');
-    setError(null);
     onCouponApply?.(null);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleVerifyCoupon();
-    }
-  };
-
   return (
-    <div className={cn('space-y-4', className)}>
+    <div className={cn('space-y-3', className)}>
       <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Promo Code</h3>
-        <p className="text-sm text-gray-600 mb-3">
+        <h3 className="text-lg font-medium text-gray-900">Promo Code</h3>
+        <p className="text-sm text-gray-600">
           Apply a discount coupon to reduce the total cost.
         </p>
+      </div>
 
-        {/* Coupon Input */}
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
-            <Input
-              type="text"
-              value={couponCode}
-              onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-              onKeyPress={handleKeyPress}
-              placeholder="Enter coupon code"
-              className={cn(
-                'pr-10',
-                error && 'border-red-300',
-                appliedCoupon && 'bg-green-50 border-green-300'
+      {appliedCoupon ? (
+        // Applied coupon summary + remove
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-start gap-2">
+            <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="text-sm font-medium text-green-800">
+                  {`Coupon "${appliedCoupon.code}" applied`}
+                </span>
+                <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+                  {bookingUtils.formatPrice(appliedCoupon.discount)} OFF
+                </Badge>
+              </div>
+              {appliedCoupon.description && (
+                <p className="text-sm text-green-700">{appliedCoupon.description}</p>
               )}
-              disabled={loading}
-            />
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              {loading ? (
-                <Loader2 size={16} className="animate-spin text-gray-400" />
-              ) : appliedCoupon ? (
-                <Check size={16} className="text-green-500" />
-              ) : (
-                <Gift size={16} className="text-gray-400" />
+              {appliedCoupon.min_purchase_amount > 0 && (
+                <p className="text-xs text-green-600 mt-1">
+                  Minimum purchase: {bookingUtils.formatPrice(appliedCoupon.min_purchase_amount)}
+                </p>
               )}
             </div>
-          </div>
-
-          {appliedCoupon ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleRemoveCoupon}
-              disabled={loading}
-            >
-              <X size={16} className="mr-2" />
+            <Button type="button" variant="outline" size="sm" onClick={handleRemoveCoupon}>
+              <X size={14} className="mr-1" />
               Remove
             </Button>
-          ) : (
-            <Button
-              type="button"
-              onClick={handleVerifyCoupon}
-              disabled={loading || !couponCode.trim()}
-            >
-              {loading ? (
-                <Loader2 size={16} className="animate-spin mr-2" />
-              ) : (
-                <Gift size={16} className="mr-2" />
-              )}
-              Apply
-            </Button>
-          )}
+          </div>
         </div>
+      ) : (
+        <SearchableSelect
+          label=""
+          options={coupons.map((c) => ({
+            id: c.id,
+            label: c.code,
+            subtitle: c.description || c.name,
+            badge: `${bookingUtils.formatPrice(c.discount)} OFF`,
+          }))}
+          value={null}
+          onSelect={handleSelect}
+          placeholder={loading ? 'Loading coupons…' : 'Select a promo code (optional)'}
+          required={false}
+          isLoading={loading}
+          allowClear={false}
+          emptyMessage="No active coupons available"
+        />
+      )}
 
-        {/* Error Message */}
-        {error && (
-          <div className="flex items-center gap-2 mt-2 text-red-600">
-            <AlertCircle size={14} />
-            <span className="text-sm">{error}</span>
-          </div>
-        )}
-
-        {/* Applied Coupon Success */}
-        {appliedCoupon && (
-          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-start gap-2">
-              <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-green-800">
-                    {`Coupon "${appliedCoupon.code}" Applied`}
-                  </span>
-                  <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
-                    {bookingUtils.formatPrice(appliedCoupon.discount)} OFF
-                  </Badge>
-                </div>
-                <p className="text-sm text-green-700">
-                  {appliedCoupon.description}
-                </p>
-                {appliedCoupon.min_purchase_amount > 0 && (
-                  <p className="text-xs text-green-600 mt-1">
-                    Minimum purchase: {bookingUtils.formatPrice(appliedCoupon.min_purchase_amount)}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      {error && (
+        <div className="flex items-center gap-2 text-red-600">
+          <AlertCircle size={14} />
+          <span className="text-sm">{error}</span>
+        </div>
+      )}
     </div>
   );
 }

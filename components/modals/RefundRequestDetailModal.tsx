@@ -122,6 +122,7 @@ export default function RefundRequestDetailModal({
   if (!isOpen) return null;
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="min-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -464,13 +465,15 @@ export default function RefundRequestDetailModal({
           </div>
         )}
       </DialogContent>
-
-      {/* Customer Detail Modal */}
-      <CustomerDetailModal
-        isOpen={isCustomerModalOpen}
-        onClose={() => setIsCustomerModalOpen(false)}
-        customerId={refund?.customer_id?.toString() || null}
-      />
     </Dialog>
+
+    {/* Customer Detail Modal — rendered as a sibling (not nested in the refund
+        Dialog) so it portals on top with its own overlay/focus trap. */}
+    <CustomerDetailModal
+      isOpen={isCustomerModalOpen}
+      onClose={() => setIsCustomerModalOpen(false)}
+      customerId={refund?.customer_id?.toString() || null}
+    />
+    </>
   );
 }

@@ -37,7 +37,7 @@ export default function CreateBookingModal({
           </DialogHeader>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 bg-gray-50/60">
           <CreateBookingForm
             onSuccess={handleSuccess}
             onCancel={onClose}

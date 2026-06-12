@@ -44,6 +44,7 @@ import {
 import { useTestCenters, useUpdateTestCenter } from '@/hooks/useAdmin';
 import { TableSkeleton } from '@/components/ui/loading-state';
 import { getApiErrorMessages, formatCAD } from '@/lib/utils';
+import { resolveTestCenterStatus } from '@/lib/utils/test-center-status';
 import { toast } from 'sonner';
 import type { TestCenter, UpdateTestCenterRequest } from '@/types/admin';
 
@@ -88,8 +89,7 @@ export default function TestCentersPage() {
   const { data: testCenters, isLoading, error, refetch } = useTestCenters();
   const { updateTestCenter, isLoading: isUpdating } = useUpdateTestCenter();
 
-  const getStatus = (center: TestCenter): string =>
-    statusById[center.id] ?? center.status ?? 'ACTIVE';
+  const getStatus = (center: TestCenter): string => resolveTestCenterStatus(center, statusById);
   const isActive = (center: TestCenter) => getStatus(center) === 'ACTIVE';
 
   const filteredCenters = useMemo(() => {

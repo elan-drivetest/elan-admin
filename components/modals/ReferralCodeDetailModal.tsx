@@ -1,12 +1,13 @@
 // components/modals/ReferralCodeDetailModal.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Gift, 
   Users, 
@@ -37,6 +38,17 @@ export default function ReferralCodeDetailModal({
   const { data: referralCode, isLoading, error, refetch } = useReferralCodeDetail(codeId || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+
+  // Admins only control availability: keep the code Active (claimable) or revoke
+  // it (Expired). The claimed/payment statuses are driven by the system as the
+  // code is used and payouts are processed, so they aren't admin-settable here.
+  const [availability, setAvailability] = useState<'active' | 'expired'>('active');
+
+  useEffect(() => {
+    if (referralCode) {
+      setAvailability(referralCode.status === 'expired' ? 'expired' : 'active');
+    }
+  }, [referralCode]);
 
   const handleStatusUpdate = async (newStatus: UpdateReferralCodeStatusRequest['status']) => {
     if (!referralCode) return;
@@ -230,28 +242,62 @@ export default function ReferralCodeDetailModal({
               </CardContent>
             </Card>
 
-            {/* Status Update Actions */}
+            {/* Manage availability */}
             <Card>
               <CardHeader>
-                <CardTitle>Update Status</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <RefreshCw className="w-5 h-5 text-primary" />
+                  Manage Availability
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {['active', 'claimed', 'pending_payment', 'partially_paid', 'fully_paid', 'expired'].map((status) => (
-                    <Button
-                      key={status}
-                      variant={referralCode.status === status ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleStatusUpdate(status as any)}
-                      disabled={isUpdating || referralCode.status === status}
-                    >
-                      {isUpdating ? (
-                        <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                      ) : null}
-                      {status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </Button>
-                  ))}
+              <CardContent className="space-y-4">
+                <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-900 leading-relaxed">
+                  This code moves through its lifecycle <span className="font-medium">automatically</span> — it becomes{' '}
+                  <span className="font-medium">Claimed</span> when an instructor uses it,{' '}
+                  <span className="font-medium">Pending Payment</span> once they complete the required rides, then{' '}
+                  <span className="font-medium">Partially / Fully Paid</span> as payouts are processed. As an admin you
+                  control one thing: whether the code is <span className="font-medium">available</span> or{' '}
+                  <span className="font-medium">revoked</span>.
                 </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700">Availability</label>
+                    <Select
+                      value={availability}
+                      onValueChange={(v) => setAvailability(v as 'active' | 'expired')}
+                      disabled={isUpdating}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active — available to be claimed</SelectItem>
+                        <SelectItem value="expired">Expired — revoked, no longer usable</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    onClick={() => handleStatusUpdate(availability)}
+                    disabled={isUpdating || availability === referralCode.status}
+                    className={availability === 'expired' ? 'bg-red-600 hover:bg-red-700' : undefined}
+                  >
+                    {isUpdating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    {availability === referralCode.status
+                      ? 'No change'
+                      : availability === 'expired'
+                        ? 'Revoke Code'
+                        : 'Make Active'}
+                  </Button>
+                </div>
+
+                {!['active', 'expired'].includes(referralCode.status) && (
+                  <p className="text-xs text-gray-500">
+                    Current status is{' '}
+                    <span className="font-medium">{referralCode.status.replace(/_/g, ' ')}</span> (set automatically).
+                    You can still revoke the code, which marks it Expired.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>

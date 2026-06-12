@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { MoreVertical, Gift, Search, RefreshCw, Users, Calendar, DollarSign, Plus } from 'lucide-react';
+import { Gift, Search, RefreshCw, Users, Calendar, DollarSign, Plus, ChevronRight } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -164,12 +164,16 @@ export default function ReferralCodesTable({
                   <TableHead>Status</TableHead>
                   <TableHead>Used Date</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead></TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.map((code) => (
-                  <TableRow key={code.id} className="hover:bg-gray-50">
+                  <TableRow
+                    key={code.id}
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleViewDetails(code.id)}
+                  >
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Gift className="w-4 h-4 text-primary" />
@@ -222,14 +226,7 @@ export default function ReferralCodesTable({
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => handleViewDetails(code.id)}
-                        disabled={isLoading}
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
                     </TableCell>
                   </TableRow>
                 ))}
