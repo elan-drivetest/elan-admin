@@ -10,25 +10,33 @@ import LoadingState, { CardSkeleton } from '@/components/ui/loading-state';
 import ErrorBoundary from '@/components/ui/error-boundary';
 import { Route } from 'lucide-react';
 import { useRideSessions } from '@/hooks/useAdmin';
+import CursorPagination from '@/components/ui/CursorPagination';
 import type { AdminRideSessionsParams } from '@/types/admin';
 
 export default function RideSessionsPage() {
   const [searchParams, setSearchParams] = useState<AdminRideSessionsParams>({
-    limit: 50,
-    orderBy: 'created_at',
+    limit: 10,
+    // Backend cursor query orders on start_time, not created_at.
+    orderBy: 'start_time',
     orderDirection: 'desc'
   });
 
-  const { data: rideSessions, isLoading, error, refetch } = useRideSessions(searchParams);
+  const { data: rideSessions, meta, isLoading, error, refetch } = useRideSessions(searchParams);
 
   // Modal state management
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
   const handleSearchUpdate = (newParams: Partial<AdminRideSessionsParams>) => {
-    const updatedParams = { ...searchParams, ...newParams };
+    const updatedParams = { ...searchParams, ...newParams, cursor: undefined, direction: undefined };
     setSearchParams(updatedParams);
     refetch(updatedParams);
+  };
+
+  const goToPage = (cursor: string, direction: 'forward' | 'backward') => {
+    const next = { ...searchParams, cursor, direction };
+    setSearchParams(next);
+    refetch(next);
   };
 
   const handleViewDetails = (sessionId: string) => {
@@ -86,13 +94,21 @@ export default function RideSessionsPage() {
             isLoading={isLoading}
           />
 
-          <RideSessionsTable 
-            title={`All Ride Sessions (${rideSessions.length})`}
+          <RideSessionsTable
+            title={`All Ride Sessions (${meta?.total ?? rideSessions.length})`}
             data={rideSessions}
             isLoading={isLoading}
             onSearch={handleSearchUpdate}
             onRefresh={() => refetch()}
             onViewDetails={handleViewDetails}
+          />
+
+          <CursorPagination
+            meta={meta}
+            count={rideSessions.length}
+            isLoading={isLoading}
+            onNext={() => meta?.nextCursor && goToPage(meta.nextCursor, 'forward')}
+            onPrev={() => meta?.prevCursor && goToPage(meta.prevCursor, 'backward')}
           />
 
           {!isLoading && rideSessions.length === 0 && (

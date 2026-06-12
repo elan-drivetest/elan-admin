@@ -47,7 +47,9 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/lib/auth-context';
 import { useAllUsers, useUpdateUserStatus } from '@/hooks/useAdmin';
+import CursorPagination from '@/components/ui/CursorPagination';
 import { TableSkeleton } from '@/components/ui/loading-state';
+import { getApiErrorMessages } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { AdminUser, AdminUserStatus, AdminUserType, AdminAllUsersParams } from '@/types/admin';
 
@@ -60,20 +62,15 @@ const STATUS_OPTIONS: { value: AdminUserStatus | 'ALL'; label: string }[] = [
   { value: 'DELETED', label: 'Deleted' },
 ];
 
-const USER_TYPE_OPTIONS: { value: AdminUserType | 'ALL'; label: string }[] = [
-  { value: 'ALL', label: 'All Types' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'customer', label: 'Customer' },
-  { value: 'instructor', label: 'Instructor' },
-];
+// NOTE: GET /admin/users/all only ever returns admins (backend hard-filters
+// user_type = ADMIN), so there is no customer/instructor filter here.
 
 export default function AdminUsersPage() {
   const { user: currentUser } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AdminUserStatus | 'ALL'>('ALL');
-  const [userTypeFilter, setUserTypeFilter] = useState<AdminUserType | 'ALL'>('ALL');
   const [searchParams, setSearchParams] = useState<AdminAllUsersParams>({
-    limit: 50,
+    limit: 10,
     orderBy: 'created_at',
     orderDirection: 'desc'
   });
@@ -83,10 +80,16 @@ export default function AdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [newStatus, setNewStatus] = useState<AdminUserStatus | ''>('');
 
-  const { data: users, isLoading, error, refetch } = useAllUsers(searchParams);
+  const { data: users, meta, isLoading, error, refetch } = useAllUsers(searchParams);
   const { updateStatus, isLoading: isUpdating } = useUpdateUserStatus();
 
-  // Filter users based on search term, status, and user type
+  const goToPage = (cursor: string, direction: 'forward' | 'backward') => {
+    const next = { ...searchParams, cursor, direction };
+    setSearchParams(next);
+    refetch(next);
+  };
+
+  // Filter users based on search term and status.
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
       const matchesSearch =
@@ -95,17 +98,18 @@ export default function AdminUsersPage() {
         (user.phone_number && user.phone_number.includes(searchTerm));
 
       const matchesStatus = statusFilter === 'ALL' || user.status === statusFilter;
-      const matchesType = userTypeFilter === 'ALL' || user.user_type === userTypeFilter;
 
-      return matchesSearch && matchesStatus && matchesType;
+      return matchesSearch && matchesStatus;
     });
-  }, [users, searchTerm, statusFilter, userTypeFilter]);
+  }, [users, searchTerm, statusFilter]);
 
   const handleSearch = () => {
     const params: AdminAllUsersParams = {
       ...searchParams,
       search: searchTerm || undefined,
       status: statusFilter !== 'ALL' ? statusFilter : undefined,
+      cursor: undefined,
+      direction: undefined,
     };
     setSearchParams(params);
     refetch(params);
@@ -133,8 +137,8 @@ export default function AdminUsersPage() {
       setSelectedUser(null);
       setNewStatus('');
       refetch(searchParams);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update user status');
+    } catch (err) {
+      toast.error(getApiErrorMessages(err).join(' '));
     }
   };
 
@@ -201,21 +205,6 @@ export default function AdminUsersPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select
-                value={userTypeFilter}
-                onValueChange={(value) => setUserTypeFilter(value as AdminUserType | 'ALL')}
-              >
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="User Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {USER_TYPE_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div className="flex justify-between items-center">
               <Button onClick={handleSearch} disabled={isLoading}>
@@ -259,7 +248,7 @@ export default function AdminUsersPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UsersIcon className="w-5 h-5 text-blue-600" />
-            All Users ({filteredUsers.length})
+            Admin Users ({filteredUsers.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -398,6 +387,14 @@ export default function AdminUsersPage() {
           )}
         </CardContent>
       </Card>
+
+      <CursorPagination
+        meta={meta}
+        count={filteredUsers.length}
+        isLoading={isLoading}
+        onNext={() => meta?.nextCursor && goToPage(meta.nextCursor, 'forward')}
+        onPrev={() => meta?.prevCursor && goToPage(meta.prevCursor, 'backward')}
+      />
 
       {/* Status Update Confirmation Modal */}
       <Dialog open={isStatusModalOpen} onOpenChange={setIsStatusModalOpen}>

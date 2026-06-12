@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import RefundRequestsTable from '@/components/tables/RefundRequestsTable';
 import RefundRequestDetailModal from '@/components/modals/RefundRequestDetailModal';
+import CursorPagination from '@/components/ui/CursorPagination';
 import { useRefunds } from '@/hooks/useRefunds';
 import { RefundRequest, GetRefundRequestsParams, RefundStatus } from '@/types/refund';
 
@@ -29,16 +30,20 @@ export default function RefundsPage() {
     }
   }, [statusFromUrl]);
 
-  const { refunds, loading, refetch } = useRefunds(params);
+  const { refunds, loading, meta, refetch } = useRefunds(params);
   const [selectedRefundId, setSelectedRefundId] = useState<number | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   const handleSearch = (searchParams: Partial<GetRefundRequestsParams>) => {
-    setParams((prev) => ({
-      ...prev,
-      ...searchParams,
-    }));
-    refetch(searchParams);
+    const next = { ...params, ...searchParams, cursor: undefined, direction: undefined };
+    setParams(next);
+    refetch(next);
+  };
+
+  const goToPage = (cursor: string, direction: 'forward' | 'backward') => {
+    const next = { ...params, cursor, direction };
+    setParams(next);
+    refetch(next);
   };
 
   const handleRefresh = () => {
@@ -75,6 +80,14 @@ export default function RefundsPage() {
         onSearch={handleSearch}
         onRefresh={handleRefresh}
         onRowClick={handleRowClick}
+      />
+
+      <CursorPagination
+        meta={meta}
+        count={refunds.length}
+        isLoading={loading}
+        onNext={() => meta?.nextCursor && goToPage(meta.nextCursor, 'forward')}
+        onPrev={() => meta?.prevCursor && goToPage(meta.prevCursor, 'backward')}
       />
 
       <RefundRequestDetailModal

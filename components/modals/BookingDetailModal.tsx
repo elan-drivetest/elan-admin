@@ -1,7 +1,7 @@
 // components/modals/BookingDetailModal.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUpdateTestResult } from '@/hooks/useAdmin';
+import { formatBookingStatus } from '@/lib/utils';
 import type { AdminBooking, TestResult } from '@/types/admin';
 import InstructorDetailModal from './InstructorDetailModal';
 import FilePreviewerModal from './FilePreviewerModal';
@@ -55,8 +56,19 @@ export default function BookingDetailModal({
   const [pendingResult, setPendingResult] = useState<TestResult | null>(null);
   const [isInstructorModalOpen, setIsInstructorModalOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<{ url: string; title: string } | null>(null);
+  // Local copy of the test result so the UI reflects updates immediately.
+  // The `booking` prop is a snapshot captured when the row was clicked, so it
+  // doesn't change after a successful update — we track it here instead.
+  const [testResult, setTestResult] = useState<TestResult | undefined>(
+    booking?.test_result as TestResult | undefined
+  );
 
   const { updateTestResult, isLoading: isUpdating } = useUpdateTestResult();
+
+  // Re-sync when a different booking is opened (or its result changes upstream).
+  useEffect(() => {
+    setTestResult(booking?.test_result as TestResult | undefined);
+  }, [booking?.id, booking?.test_result]);
 
   if (!booking) return null;
 
@@ -92,20 +104,8 @@ export default function BookingDetailModal({
   };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { color: string; text: string }> = {
-      'pending': { color: 'bg-yellow-100 text-yellow-800', text: 'Pending' },
-      'confirmed': { color: 'bg-green-100 text-green-800', text: 'Confirmed' },
-      'succeeded': { color: 'bg-green-100 text-green-800', text: 'Succeeded' },
-      'active': { color: 'bg-blue-100 text-blue-800', text: 'Active' },
-      'in_progress': { color: 'bg-purple-100 text-purple-800', text: 'In Progress' },
-      'completed': { color: 'bg-gray-100 text-gray-800', text: 'Completed' },
-      'cancelled': { color: 'bg-red-100 text-red-800', text: 'Cancelled' },
-    };
-
-    const config = statusConfig[status.toLowerCase()] ||
-      { color: 'bg-gray-100 text-gray-800', text: status };
-
-    return <Badge className={config.color}>{config.text}</Badge>;
+    const { className, label } = formatBookingStatus(status);
+    return <Badge className={className}>{label}</Badge>;
   };
 
   const getTestResultBadge = (result?: string) => {
@@ -128,6 +128,7 @@ export default function BookingDetailModal({
 
     try {
       await updateTestResult(booking.id, pendingResult);
+      setTestResult(pendingResult); // Reflect the change in the UI immediately
       toast.success(`Test result updated to ${pendingResult === 'PASS' ? 'Passed' : 'Failed'}`);
       setIsConfirmModalOpen(false);
       setPendingResult(null);
@@ -144,6 +145,16 @@ export default function BookingDetailModal({
   const distanceFormatted = formatDistance(booking.pickup_distance);
   const latitudeFormatted = formatCoordinate(booking.pickup_latitude);
   const longitudeFormatted = formatCoordinate(booking.pickup_longitude);
+
+  // Pricing: the API sometimes leaves discount_amount null even when a coupon
+  // was applied (the discount is baked into total_price). Derive it from the
+  // line items so the breakdown always reconciles to the total.
+  const subtotal = booking.base_price + booking.pickup_price + booking.addons_price;
+  const discountAmount =
+    booking.discount_amount && booking.discount_amount > 0
+      ? booking.discount_amount
+      : Math.max(0, subtotal - booking.total_price);
+  const hasDiscount = discountAmount > 0;
 
   return (
     <>
@@ -184,7 +195,7 @@ export default function BookingDetailModal({
                 <div className="bg-white rounded-lg p-4 border">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm font-medium">Test Result</span>
-                    {getTestResultBadge(booking.test_result)}
+                    {getTestResultBadge(testResult)}
                   </div>
 
                   {/* Update Test Result Buttons - Always visible for admin */}
@@ -195,9 +206,9 @@ export default function BookingDetailModal({
                         variant="ghost"
                         size="sm"
                         onClick={() => handleTestResultClick('PASS')}
-                        disabled={isUpdating || booking.test_result === 'PASS'}
+                        disabled={isUpdating || testResult === 'PASS'}
                         className={`flex-1 border ${
-                          booking.test_result === 'PASS'
+                          testResult === 'PASS'
                             ? 'bg-green-100 text-green-800 border-green-300'
                             : 'text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200'
                         }`}
@@ -209,9 +220,9 @@ export default function BookingDetailModal({
                         variant="ghost"
                         size="sm"
                         onClick={() => handleTestResultClick('FAIL')}
-                        disabled={isUpdating || booking.test_result === 'FAIL'}
+                        disabled={isUpdating || testResult === 'FAIL'}
                         className={`flex-1 border ${
-                          booking.test_result === 'FAIL'
+                          testResult === 'FAIL'
                             ? 'bg-red-100 text-red-800 border-red-300'
                             : 'text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200'
                         }`}
@@ -294,34 +305,46 @@ export default function BookingDetailModal({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-end justify-between">
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between gap-8">
-                      <span className="text-gray-600">Base:</span>
-                      <span>{formatPrice(booking.base_price)}</span>
-                    </div>
-                    {booking.pickup_price > 0 && (
-                      <div className="flex justify-between gap-8">
-                        <span className="text-gray-600">Pickup:</span>
-                        <span>{formatPrice(booking.pickup_price)}</span>
-                      </div>
-                    )}
-                    {booking.addons_price > 0 && (
-                      <div className="flex justify-between gap-8">
-                        <span className="text-gray-600">Addons:</span>
-                        <span>{formatPrice(booking.addons_price)}</span>
-                      </div>
-                    )}
-                    {booking.discount_amount && booking.discount_amount > 0 && (
-                      <div className="flex justify-between gap-8 text-red-600">
-                        <span>Discount:</span>
-                        <span>-{formatPrice(booking.discount_amount)}</span>
-                      </div>
-                    )}
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Base price</span>
+                    <span className="font-medium">{formatPrice(booking.base_price)}</span>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-500">Total</p>
-                    <p className="text-3xl font-bold text-green-600">{formatPrice(booking.total_price)}</p>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">
+                      Pickup{distanceFormatted ? ` (${distanceFormatted} km)` : ''}
+                    </span>
+                    <span className="font-medium">+ {formatPrice(booking.pickup_price)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Add-ons</span>
+                    <span className="font-medium">+ {formatPrice(booking.addons_price)}</span>
+                  </div>
+
+                  <div className="flex justify-between border-t pt-1.5">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="font-medium">{formatPrice(subtotal)}</span>
+                  </div>
+
+                  {(hasDiscount || booking.coupon_code) && (
+                    <div className="flex justify-between items-center text-red-600">
+                      <span className="flex items-center gap-1.5">
+                        Discount
+                        {booking.coupon_code && (
+                          <Badge variant="outline" className="border-green-300 bg-green-50 text-green-700 text-xs font-mono">
+                            {booking.coupon_code}
+                          </Badge>
+                        )}
+                      </span>
+                      <span className="font-medium">
+                        {hasDiscount ? `- ${formatPrice(discountAmount)}` : '—'}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center border-t pt-2 mt-1">
+                    <span className="font-semibold text-gray-900">Total</span>
+                    <span className="text-2xl font-bold text-green-600">{formatPrice(booking.total_price)}</span>
                   </div>
                 </div>
               </CardContent>
@@ -351,6 +374,9 @@ export default function BookingDetailModal({
                     </p>
                     {!booking.meet_at_center && distanceFormatted && (
                       <p className="text-xs text-gray-500 mt-0.5">{distanceFormatted} km from center</p>
+                    )}
+                    {!booking.meet_at_center && latitudeFormatted && longitudeFormatted && (
+                      <p className="text-xs text-gray-400 mt-0.5 font-mono">{latitudeFormatted}, {longitudeFormatted}</p>
                     )}
                   </div>
 
@@ -498,7 +524,7 @@ export default function BookingDetailModal({
               </div>
               <div className="flex justify-between text-sm items-center">
                 <span className="text-gray-500">Current Result:</span>
-                {getTestResultBadge(booking.test_result)}
+                {getTestResultBadge(testResult)}
               </div>
               <div className="flex justify-between text-sm items-center pt-2 border-t">
                 <span className="text-gray-500 font-medium">New Result:</span>

@@ -90,29 +90,27 @@ export default function CustomersTable({
         </Badge>
       );
     }
-    
-    if (passed > 0) {
-      return (
-        <Badge className="bg-green-100 text-green-800">
-          <CheckCircle className="w-3 h-3 mr-1" />
-          Passed ({passed})
-        </Badge>
-      );
-    }
-    
-    if (failed > 0) {
-      return (
-        <Badge className="bg-red-100 text-red-800">
-          <XCircle className="w-3 h-3 mr-1" />
-          Failed ({failed})
-        </Badge>
-      );
+
+    // Show passed AND failed counts so neither is hidden.
+    if (passed === 0 && failed === 0) {
+      return <Badge className="bg-yellow-100 text-yellow-800">In Progress</Badge>;
     }
 
     return (
-      <Badge className="bg-yellow-100 text-yellow-800">
-        In Progress
-      </Badge>
+      <div className="flex items-center gap-1.5">
+        {passed > 0 && (
+          <Badge className="bg-green-100 text-green-800">
+            <CheckCircle className="w-3 h-3 mr-1" />
+            {passed} Passed
+          </Badge>
+        )}
+        {failed > 0 && (
+          <Badge className="bg-red-100 text-red-800">
+            <XCircle className="w-3 h-3 mr-1" />
+            {failed} Failed
+          </Badge>
+        )}
+      </div>
     );
   };
 

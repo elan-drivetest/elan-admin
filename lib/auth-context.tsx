@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useEffect, useReducer, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/services/auth';
+import { refreshAuthToken } from '@/lib/axios';
 import type { User, LoginCredentials, AuthState, AuthError } from '@/types/auth';
 
 type AuthAction =
@@ -126,6 +127,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     initializeAuth();
   }, []);
+
+  // Proactive silent refresh: keep the session alive while the app is open.
+  // The backend access token (`AUTH_JWT_TOKEN_EXPIRES_IN`) is ~15 min and the
+  // /auth/admin/refresh endpoint rotates BOTH cookies, so refreshing comfortably
+  // before the access token lapses slides the whole session forward. The reactive
+  // 401 interceptor in lib/axios.ts remains the fallback.
+  useEffect(() => {
+    if (!state.isAuthenticated) return;
+
+    const REFRESH_INTERVAL_MS = 12 * 60 * 1000; // < 15 min access lifetime, ~3 min buffer
+
+    // Silent — never toggles loading or logs out on a transient failure; if the
+    // refresh token has truly expired, the next real request's 401 path handles logout.
+    const silentRefresh = () => { void refreshAuthToken(); };
+
+    const intervalId = setInterval(silentRefresh, REFRESH_INTERVAL_MS);
+
+    // Background tabs throttle timers, so also refresh when the tab regains focus
+    // (covers laptop sleep / long-hidden tabs).
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') silentRefresh();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [state.isAuthenticated]);
 
   const login = async (credentials: LoginCredentials) => {
     try {

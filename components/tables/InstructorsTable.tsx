@@ -57,7 +57,8 @@ export default function InstructorsTable({
       onSearch({
         instructorName: instructorSearch || undefined,
         email: emailSearch || undefined,
-        vehicleBrand: vehicleSearch || undefined,
+        // Broad search so vehicle brand AND model (and address) match, not just brand.
+        search: vehicleSearch || undefined,
       });
     }
   };
@@ -141,7 +142,7 @@ export default function InstructorsTable({
               className="text-sm"
             />
             <Input
-              placeholder="Search by vehicle..."
+              placeholder="Search by vehicle / address..."
               value={vehicleSearch}
               onChange={(e) => setVehicleSearch(e.target.value)}
               onKeyPress={handleKeyPress}

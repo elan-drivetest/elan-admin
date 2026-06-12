@@ -29,7 +29,7 @@ export interface RefundRequestsResponse {
     hasNextPage: boolean;
     hasPreviousPage: boolean;
     nextCursor?: string;
-    previousCursor?: string;
+    prevCursor?: string; // backend key is prevCursor, not previousCursor
   };
 }
 

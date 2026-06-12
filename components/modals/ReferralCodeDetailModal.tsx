@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useReferralCodeDetail } from '@/hooks/useAdmin';
 import { adminService } from '@/services/admin';
+import { getApiErrorMessage } from '@/lib/utils';
 import type { UpdateReferralCodeStatusRequest } from '@/types/admin';
 
 interface ReferralCodeDetailModalProps {
@@ -48,7 +49,7 @@ export default function ReferralCodeDetailModal({
       await refetch();
       onSuccess?.();
     } catch (error: any) {
-      setUpdateError(error?.response?.data?.message || 'Failed to update status');
+      setUpdateError(getApiErrorMessage(error));
     } finally {
       setIsUpdating(false);
     }
@@ -140,10 +141,19 @@ export default function ReferralCodeDetailModal({
                     </div>
                   </div>
                   <div>
-                    <h4 className="font-medium text-sm text-gray-700 mb-2">Instructor ID</h4>
+                    <h4 className="font-medium text-sm text-gray-700 mb-2">Owner</h4>
                     <div className="flex items-center gap-2">
                       <Users className="w-4 h-4 text-gray-400" />
-                      <span>#{referralCode.instructor_id}</span>
+                      {referralCode.referrer ? (
+                        <div>
+                          <p className="font-medium">{referralCode.referrer.full_name}</p>
+                          <p className="text-xs text-gray-500">{referralCode.referrer.email}</p>
+                        </div>
+                      ) : referralCode.referral_type === 'admin' ? (
+                        <span>Admin-created</span>
+                      ) : (
+                        <span>{referralCode.instructor_id ? `#${referralCode.instructor_id}` : '—'}</span>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -169,8 +179,15 @@ export default function ReferralCodeDetailModal({
                     <span className="text-lg font-medium">{referralCode.rides_completed_count}</span>
                   </div>
                   <div>
-                    <h4 className="font-medium text-sm text-gray-700 mb-2">Used By Instructor</h4>
-                    <span>{referralCode.used_by_instructor_id ? `#${referralCode.used_by_instructor_id}` : 'Not used yet'}</span>
+                    <h4 className="font-medium text-sm text-gray-700 mb-2">Used By</h4>
+                    {referralCode.referee ? (
+                      <div>
+                        <p className="font-medium">{referralCode.referee.full_name}</p>
+                        <p className="text-xs text-gray-500">{referralCode.referee.email}</p>
+                      </div>
+                    ) : (
+                      <span>{referralCode.used_by_instructor_id ? `#${referralCode.used_by_instructor_id}` : 'Not used yet'}</span>
+                    )}
                   </div>
                   <div>
                     <h4 className="font-medium text-sm text-gray-700 mb-2">Used Date</h4>

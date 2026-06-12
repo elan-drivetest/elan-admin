@@ -6,13 +6,14 @@ import {
   GetRefundRequestsParams,
   UpdateRefundRequestPayload,
 } from "@/types/refund";
+import { getApiErrorMessages } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const useRefunds = (initialParams?: GetRefundRequestsParams) => {
   const [refunds, setRefunds] = useState<RefundRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [meta, setMeta] = useState({
+  const [meta, setMeta] = useState<RefundRequestsResponse["meta"]>({
     limit: 10,
     hasNextPage: false,
     hasPreviousPage: false,
@@ -29,8 +30,7 @@ export const useRefunds = (initialParams?: GetRefundRequestsParams) => {
       setRefunds(response.data);
       setMeta(response.meta);
     } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.message || "Failed to fetch refund requests";
+      const errorMessage = getApiErrorMessages(err).join(" ");
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -65,8 +65,7 @@ export const useRefundDetail = (id: number | null) => {
       const response = await refundService.getRefundRequestById(id);
       setRefund(response);
     } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.message || "Failed to fetch refund details";
+      const errorMessage = getApiErrorMessages(err).join(" ");
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -101,8 +100,7 @@ export const useUpdateRefund = () => {
       toast.success("Refund request updated successfully");
       return response;
     } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.message || "Failed to update refund request";
+      const errorMessage = getApiErrorMessages(err).join(" ");
       setError(errorMessage);
       toast.error(errorMessage);
       return null;

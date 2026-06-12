@@ -9,11 +9,21 @@ import { Badge } from '@/components/ui/badge';
 import { User, Mail, Phone, MapPin, Calendar, Edit, Shield } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import ProfileEditForm from '@/components/forms/ProfileEditForm';
+import ChangePasswordModal from '@/components/modals/ChangePasswordModal';
 import Image from 'next/image';
+
+// `/auth/admin/me` doesn't currently return created_at/updated_at, so guard against
+// "Invalid Date" by rendering a dash when the value is missing/unparseable.
+const formatDate = (value?: string) => {
+  if (!value) return '—';
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+};
 
 export default function ProfilePage() {
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   if (!user) {
     return (
@@ -123,7 +133,7 @@ export default function ProfilePage() {
                           <div>
                             <p className="text-sm text-gray-600">Member Since</p>
                             <p className="text-sm font-medium">
-                              {new Date(user.createdAt).toLocaleDateString()}
+                              {formatDate(user.createdAt)}
                             </p>
                           </div>
                         </div>
@@ -160,10 +170,10 @@ export default function ProfilePage() {
                     <div>
                       <h3 className="font-medium">Password</h3>
                       <p className="text-sm text-gray-600">
-                        Last updated: {new Date(user.lastLoginAt || user.createdAt).toLocaleDateString()}
+                        Last updated: {formatDate(user.lastLoginAt || user.createdAt)}
                       </p>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => setIsChangePasswordOpen(true)}>
                       Change Password
                     </Button>
                   </div>
@@ -173,6 +183,11 @@ export default function ProfilePage() {
           </>
         )}
       </div>
+
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+      />
     </>
   );
 }

@@ -10,16 +10,17 @@ import ErrorBoundary from '@/components/ui/error-boundary';
 import { Button } from '@/components/ui/button';
 import { Gift, Calendar, DollarSign, ArrowLeft } from 'lucide-react';
 import { useExpiredCoupons } from '@/hooks/useAdmin';
+import CursorPagination from '@/components/ui/CursorPagination';
 import type { AdminCouponsParams } from '@/types/admin';
 
 export default function ExpiredCouponsPage() {
   const [searchParams, setSearchParams] = useState<AdminCouponsParams>({
-    limit: 50,
+    limit: 10,
     orderBy: 'expires_at',
     orderDirection: 'desc'
   });
 
-  const { data: expiredCoupons, isLoading, error, refetch } = useExpiredCoupons(searchParams);
+  const { data: expiredCoupons, meta, isLoading, error, refetch } = useExpiredCoupons(searchParams);
 
   const metrics = React.useMemo(() => {
     const totalExpired = expiredCoupons.length;
@@ -36,9 +37,15 @@ export default function ExpiredCouponsPage() {
   }, [expiredCoupons]);
 
   const handleSearchUpdate = (newParams: Partial<AdminCouponsParams>) => {
-    const updatedParams = { ...searchParams, ...newParams };
+    const updatedParams = { ...searchParams, ...newParams, cursor: undefined, direction: undefined };
     setSearchParams(updatedParams);
     refetch(updatedParams);
+  };
+
+  const goToPage = (cursor: string, direction: 'forward' | 'backward') => {
+    const next = { ...searchParams, cursor, direction };
+    setSearchParams(next);
+    refetch(next);
   };
 
   if (isLoading && expiredCoupons.length === 0) {
@@ -88,12 +95,20 @@ export default function ExpiredCouponsPage() {
             </div>
           )}
 
-          <CouponsTable 
-            title={`Expired Coupons (${expiredCoupons.length})`}
+          <CouponsTable
+            title={`Expired Coupons (${meta?.total ?? expiredCoupons.length})`}
             data={expiredCoupons}
             isLoading={isLoading}
             onSearch={handleSearchUpdate}
             onRefresh={() => refetch()}
+          />
+
+          <CursorPagination
+            meta={meta}
+            count={expiredCoupons.length}
+            isLoading={isLoading}
+            onNext={() => meta?.nextCursor && goToPage(meta.nextCursor, 'forward')}
+            onPrev={() => meta?.prevCursor && goToPage(meta.prevCursor, 'backward')}
           />
 
           {!isLoading && expiredCoupons.length === 0 && (

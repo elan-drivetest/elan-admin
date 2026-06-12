@@ -27,21 +27,27 @@ export default function CouponUsageDetailPage({ params }: PageProps) {
   const { data: coupon, isLoading: couponLoading } = useCouponDetail(resolvedParams.id);
   const { data: usageData, isLoading, error, refetch } = useCouponUsageById(resolvedParams.id, searchParams);
 
+  // The usage record's discount_amount is unreliable; use the coupon's real discount.
+  const couponDiscounts = React.useMemo(
+    () => (coupon ? { [coupon.code]: coupon.discount } : {}),
+    [coupon]
+  );
+
   const metrics = React.useMemo(() => {
     const totalUsages = usageData.length;
-    const totalDiscount = usageData.reduce((sum, u) => sum + u.discount_amount, 0);
+    const totalDiscount = usageData.reduce((sum, u) => sum + (couponDiscounts[u.coupon_code] ?? u.discount_amount), 0);
     const uniqueCustomers = new Set(usageData.map(u => u.customer_email)).size;
-    const avgBookingValue = usageData.length > 0 
-      ? usageData.reduce((sum, u) => sum + u.total_price, 0) / usageData.length 
+    const avgBookingValue = usageData.length > 0
+      ? usageData.reduce((sum, u) => sum + u.total_price, 0) / usageData.length
       : 0;
 
     return [
       { title: 'Total Usage', value: totalUsages.toString(), icon: Gift },
       { title: 'Unique Customers', value: uniqueCustomers.toString(), icon: Users },
-      { title: 'Total Discount Given', value: `$${(totalDiscount / 100).toLocaleString()}`, icon: DollarSign },
-      { title: 'Avg Booking Value', value: `$${(avgBookingValue / 100).toFixed(0)}`, icon: Calendar }
+      { title: 'Total Discount Given', value: `$${(totalDiscount / 100).toLocaleString()} CAD`, icon: DollarSign },
+      { title: 'Avg Booking Value', value: `$${(avgBookingValue / 100).toFixed(0)} CAD`, icon: Calendar }
     ];
-  }, [usageData]);
+  }, [usageData, couponDiscounts]);
 
   const handleSearchUpdate = (newParams: Partial<AdminCouponUsageParams>) => {
     const updatedParams = { ...searchParams, ...newParams };
@@ -114,13 +120,14 @@ export default function CouponUsageDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          <CouponUsageTable 
+          <CouponUsageTable
             title={`Usage Details (${usageData.length})`}
             data={usageData}
             isLoading={isLoading}
             onSearch={handleSearchUpdate}
             onRefresh={() => refetch()}
             showCouponColumn={false}
+            couponDiscounts={couponDiscounts}
           />
 
           {!isLoading && usageData.length === 0 && (

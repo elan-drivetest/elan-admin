@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import FormErrorAlert from '@/components/ui/form-error-alert';
 import { Gift, DollarSign, Hash, Loader2 } from 'lucide-react';
 import { adminService } from '@/services/admin';
+import { getApiErrorMessages } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { CreateReferralCodeRequest } from '@/types/admin';
 
@@ -24,7 +25,7 @@ export default function CreateReferralCodeModal({
   onSuccess
 }: CreateReferralCodeModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessages, setErrorMessages] = useState<string[]>([]);
 
   // Form state
   const [code, setCode] = useState('');
@@ -35,7 +36,7 @@ export default function CreateReferralCodeModal({
     setCode('');
     setAmount('');
     setMinRidesRequired('5');
-    setError(null);
+    setErrorMessages([]);
   };
 
   const handleClose = () => {
@@ -45,8 +46,9 @@ export default function CreateReferralCodeModal({
 
   const generateRandomCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    // Backend requires 6–10 chars: "ADMIN" (5) + 5 random = 10.
     let result = 'ADMIN';
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     setCode(result);
@@ -54,21 +56,25 @@ export default function CreateReferralCodeModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setErrorMessages([]);
 
     // Validation
     if (!code.trim()) {
-      setError('Referral code is required');
+      setErrorMessages(['Referral code is required']);
+      return;
+    }
+    if (code.trim().length < 6 || code.trim().length > 10) {
+      setErrorMessages(['Referral code must be 6–10 characters']);
       return;
     }
 
     if (!amount || parseFloat(amount) <= 0) {
-      setError('Amount must be greater than 0');
+      setErrorMessages(['Amount must be greater than 0']);
       return;
     }
 
     if (!minRidesRequired || parseInt(minRidesRequired) < 1) {
-      setError('Minimum rides required must be at least 1');
+      setErrorMessages(['Minimum rides required must be at least 1']);
       return;
     }
 
@@ -85,9 +91,9 @@ export default function CreateReferralCodeModal({
       handleClose();
       onSuccess?.();
     } catch (err: any) {
-      const errorMessage = err?.response?.data?.message || 'Failed to create referral code';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      const messages = getApiErrorMessages(err);
+      setErrorMessages(messages);
+      toast.error(messages.join(' '));
     } finally {
       setIsSubmitting(false);
     }
@@ -107,11 +113,7 @@ export default function CreateReferralCodeModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+          <FormErrorAlert messages={errorMessages} />
 
           {/* Code Field */}
           <div className="space-y-2">
@@ -127,7 +129,7 @@ export default function CreateReferralCodeModal({
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
                   className="pl-10 font-mono uppercase"
                   disabled={isSubmitting}
-                  maxLength={20}
+                  maxLength={10}
                 />
               </div>
               <Button

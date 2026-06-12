@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import FormErrorAlert from '@/components/ui/form-error-alert';
 import { Loader2, UserPlus, ArrowLeft } from 'lucide-react';
 import { authService } from '@/services/auth';
+import { getApiErrorMessages } from '@/lib/utils';
 
 const createAdminSchema = z.object({
   full_name: z
@@ -36,7 +38,7 @@ interface CreateAdminFormProps {
 
 export default function CreateAdminForm({ onSuccess, onCancel }: CreateAdminFormProps) {
   const [isLoading, setIsLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [errorMessages, setErrorMessages] = React.useState<string[]>([]);
   const [success, setSuccess] = React.useState(false);
 
   const {
@@ -56,8 +58,8 @@ export default function CreateAdminForm({ onSuccess, onCancel }: CreateAdminForm
   const onSubmit: SubmitHandler<CreateAdminFormData> = async (data) => {
     try {
       setIsLoading(true);
-      setError(null);
-      
+      setErrorMessages([]);
+
       await authService.createAdmin(data);
       
       setSuccess(true);
@@ -70,10 +72,7 @@ export default function CreateAdminForm({ onSuccess, onCancel }: CreateAdminForm
       
     } catch (error: any) {
       console.error('Create admin error:', error);
-      setError(
-        error?.response?.data?.message || 
-        'Failed to create admin user. Please try again.'
-      );
+      setErrorMessages(getApiErrorMessages(error));
     } finally {
       setIsLoading(false);
     }
@@ -145,11 +144,7 @@ export default function CreateAdminForm({ onSuccess, onCancel }: CreateAdminForm
       )}
 
       {/* Error Alert */}
-      {error && (
-        <Alert variant="destructive" className="border-red-200 bg-red-50">
-          <AlertDescription className="text-red-800">{error}</AlertDescription>
-        </Alert>
-      )}
+      <FormErrorAlert messages={errorMessages} />
 
       {/* Action Buttons */}
       <div className="flex items-center gap-3 pt-4">

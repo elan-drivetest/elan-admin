@@ -21,14 +21,21 @@ export default function RideSessionFilters({ onSearch, isLoading = false }: Ride
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  // datetime-local inputs are naive local strings; the backend expects ISO datetimes.
+  const toIso = (v: string) => {
+    if (!v) return undefined;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? undefined : d.toISOString();
+  };
+
   const handleSearch = () => {
     onSearch({
       centerName: centerSearch || undefined,
       instructorName: instructorSearch || undefined,
       customerName: customerSearch || undefined,
       testType: testTypeSearch || undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
+      startDate: toIso(startDate),
+      endDate: toIso(endDate),
     });
   };
 

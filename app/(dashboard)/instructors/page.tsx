@@ -8,22 +8,29 @@ import InstructorsTable from '@/components/tables/InstructorsTable';
 import LoadingState, { CardSkeleton } from '@/components/ui/loading-state';
 import ErrorBoundary from '@/components/ui/error-boundary';
 import { useDashboardAnalytics, useInstructors } from '@/hooks/useAdmin';
+import CursorPagination from '@/components/ui/CursorPagination';
 import type { AdminInstructorsParams } from '@/types/admin';
 
 export default function InstructorsPage() {
   const [searchParams, setSearchParams] = useState<AdminInstructorsParams>({
-    limit: 50,
+    limit: 10,
     orderBy: 'created_at',
     orderDirection: 'desc'
   });
 
   const { data: analytics, isLoading: analyticsLoading, error: analyticsError } = useDashboardAnalytics();
-  const { data: instructors, isLoading: instructorsLoading, error: instructorsError, refetch } = useInstructors(searchParams);
+  const { data: instructors, meta, isLoading: instructorsLoading, error: instructorsError, refetch } = useInstructors(searchParams);
 
   const handleSearchUpdate = (newParams: Partial<AdminInstructorsParams>) => {
-    const updatedParams = { ...searchParams, ...newParams };
+    const updatedParams = { ...searchParams, ...newParams, cursor: undefined, direction: undefined };
     setSearchParams(updatedParams);
     refetch(updatedParams);
+  };
+
+  const goToPage = (cursor: string, direction: 'forward' | 'backward') => {
+    const next = { ...searchParams, cursor, direction };
+    setSearchParams(next);
+    refetch(next);
   };
 
   if (analyticsLoading && instructorsLoading) {
@@ -74,12 +81,20 @@ export default function InstructorsPage() {
             </div>
           )}
 
-          <InstructorsTable 
+          <InstructorsTable
             title="All Instructors"
             data={instructors}
             isLoading={instructorsLoading}
             onSearch={handleSearchUpdate}
             onRefresh={() => refetch()}
+          />
+
+          <CursorPagination
+            meta={meta}
+            count={instructors.length}
+            isLoading={instructorsLoading}
+            onNext={() => meta?.nextCursor && goToPage(meta.nextCursor, 'forward')}
+            onPrev={() => meta?.prevCursor && goToPage(meta.prevCursor, 'backward')}
           />
         </div>
       </>

@@ -19,11 +19,14 @@ import {
   Car,
   FileText,
   ExternalLink,
-  Users
+  Users,
+  UserPlus
 } from 'lucide-react';
 import { useCustomerDetail } from '@/hooks/useAdmin';
 import type { AdminCustomerDetail, CustomerBooking } from '@/types/admin';
 import Image from 'next/image';
+import FilePreviewerModal from './FilePreviewerModal';
+import AssignInstructorModal from './AssignInstructorModal';
 
 interface CustomerDetailModalProps {
   isOpen: boolean;
@@ -36,7 +39,16 @@ export default function CustomerDetailModal({
   onClose,
   customerId
 }: CustomerDetailModalProps) {
-  const { data: customer, isLoading, error } = useCustomerDetail(customerId || '');
+  const { data: customer, isLoading, error, refetch } = useCustomerDetail(customerId || '');
+  const [previewFile, setPreviewFile] = React.useState<{ url: string; title: string } | null>(null);
+  const [assignBookingId, setAssignBookingId] = React.useState<number | null>(null);
+
+  // A booking can have an instructor assigned only while it's still an active
+  // booking — not once it's been cancelled, refunded, completed or not attempted.
+  const NON_ASSIGNABLE_STATUSES = ['cancelled', 'refunded', 'completed', 'expired', 'no_show', 'not_attempted'];
+  const canAssignInstructor = (booking: CustomerBooking) =>
+    !booking.instructor_name?.trim() &&
+    !NON_ASSIGNABLE_STATUSES.includes((booking.status || '').toLowerCase());
 
   // Format currency from cents to dollars
   const formatPrice = (price: number) => {
@@ -49,15 +61,20 @@ export default function CustomerDetailModal({
       'ACTIVE': { color: 'bg-green-100 text-green-800', icon: CheckCircle },
       'INACTIVE': { color: 'bg-gray-100 text-gray-800', icon: XCircle },
       'SUSPENDED': { color: 'bg-red-100 text-red-800', icon: XCircle },
+      'PENDING_VERIFICATION': { color: 'bg-yellow-100 text-yellow-800', icon: Clock },
     };
-    
-    const config = statusConfig[status as keyof typeof statusConfig] || 
+
+    const config = statusConfig[status as keyof typeof statusConfig] ||
                   { color: 'bg-gray-100 text-gray-800', icon: Clock };
-    
+
+    const label = status
+      ? status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+      : 'Unknown';
+
     return (
       <Badge className={config.color}>
         <config.icon className="w-3 h-3 mr-1" />
-        {status}
+        {label}
       </Badge>
     );
   };
@@ -152,16 +169,29 @@ export default function CustomerDetailModal({
           <div className="space-y-3">
             <div>
               <h4 className="font-medium text-sm text-gray-700 mb-1">Instructor</h4>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-sm">
-                  <Users className="w-4 h-4 text-gray-400" />
-                  {booking.instructor_name}
+              {booking.instructor_name?.trim() ? (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Users className="w-4 h-4 text-gray-400" />
+                    {booking.instructor_name}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    {booking.instructor_phone}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Phone className="w-4 h-4 text-gray-400" />
-                  {booking.instructor_phone}
-                </div>
-              </div>
+              ) : canAssignInstructor(booking) ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAssignBookingId(booking.id)}
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Assign Instructor
+                </Button>
+              ) : (
+                <p className="text-sm text-gray-400">Not assigned</p>
+              )}
             </div>
 
             <div>
@@ -188,10 +218,10 @@ export default function CustomerDetailModal({
             <h4 className="font-medium text-sm text-gray-700 mb-2">Documents</h4>
             <div className="flex flex-wrap gap-2">
               {booking.road_test_doc_url && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => window.open(booking.road_test_doc_url, '_blank')}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPreviewFile({ url: booking.road_test_doc_url!, title: 'Road Test Document' })}
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   Road Test Document
@@ -199,10 +229,10 @@ export default function CustomerDetailModal({
                 </Button>
               )}
               {booking.g1_license_doc_url && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
-                  onClick={() => window.open(booking.g1_license_doc_url, '_blank')}
+                  onClick={() => setPreviewFile({ url: booking.g1_license_doc_url!, title: 'G1 License' })}
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   G1 License
@@ -217,6 +247,7 @@ export default function CustomerDetailModal({
   );
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="min-w-fit max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -363,5 +394,25 @@ export default function CustomerDetailModal({
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Document Previewer Modal */}
+    <FilePreviewerModal
+      isOpen={!!previewFile}
+      onClose={() => setPreviewFile(null)}
+      fileUrl={previewFile?.url || null}
+      title={previewFile?.title || 'Document'}
+    />
+
+    {/* Assign Instructor Modal */}
+    <AssignInstructorModal
+      isOpen={assignBookingId !== null}
+      onClose={() => setAssignBookingId(null)}
+      bookingId={assignBookingId}
+      onSuccess={() => {
+        setAssignBookingId(null);
+        refetch();
+      }}
+    />
+    </>
   );
 }

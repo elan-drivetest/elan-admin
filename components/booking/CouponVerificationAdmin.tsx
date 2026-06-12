@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { adminService } from '@/services/admin';
 import { bookingUtils } from '@/lib/utils/booking-calculations';
+import { getApiErrorMessages } from '@/lib/utils';
 import type { CouponVerificationResponse } from '@/types/admin';
 
 interface CouponVerificationAdminProps {
@@ -43,11 +44,10 @@ export default function CouponVerificationAdmin({
       setLoading(true);
       setError(null);
 
-      const response = await adminService.verifyCouponCode({ code: couponCode.trim() });
+      const response = await adminService.verifyCouponForAdmin(couponCode.trim());
       onCouponApply?.(response);
     } catch (err: any) {
-      const errorMessage = err?.response?.data?.message || 'Invalid coupon code';
-      setError(errorMessage);
+      setError(getApiErrorMessages(err).join(' '));
       onCouponApply?.(null);
     } finally {
       setLoading(false);

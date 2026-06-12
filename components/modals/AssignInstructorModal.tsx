@@ -6,9 +6,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import FormErrorAlert from '@/components/ui/form-error-alert';
 import { Loader2, GraduationCap, Star, Phone, Car, CheckCircle } from 'lucide-react';
 import { useBookingInstructors } from '@/hooks/useAdmin';
 import { adminService } from '@/services/admin';
+import { getApiErrorMessages } from '@/lib/utils';
 import type { BookingInstructor, AssignInstructorRequest } from '@/types/admin';
 
 interface AssignInstructorModalProps {
@@ -29,13 +31,13 @@ export default function AssignInstructorModal({
   const { data: instructors, isLoading, error, refetch } = useBookingInstructors();
   const [selectedInstructorId, setSelectedInstructorId] = useState<number | null>(currentInstructorId || null);
   const [isAssigning, setIsAssigning] = useState(false);
-  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignErrors, setAssignErrors] = useState<string[]>([]);
 
   // Reset state when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       setSelectedInstructorId(currentInstructorId || null);
-      setAssignError(null);
+      setAssignErrors([]);
     }
   }, [isOpen, currentInstructorId]);
 
@@ -44,7 +46,7 @@ export default function AssignInstructorModal({
 
     try {
       setIsAssigning(true);
-      setAssignError(null);
+      setAssignErrors([]);
 
       const assignData: AssignInstructorRequest = {
         booking_id: bookingId,
@@ -56,18 +58,12 @@ export default function AssignInstructorModal({
       onClose();
     } catch (error: any) {
       console.error('Assign instructor error:', error);
-      
-      let errorMessage = 'Failed to assign instructor. Please try again.';
-      
+
       if (error.response?.status === 401) {
-        errorMessage = 'Authentication required. Please refresh your session.';
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
+        setAssignErrors(['Authentication required. Please refresh your session.']);
+      } else {
+        setAssignErrors(getApiErrorMessages(error));
       }
-      
-      setAssignError(errorMessage);
     } finally {
       setIsAssigning(false);
     }
@@ -125,16 +121,6 @@ export default function AssignInstructorModal({
         </div>
 
         <div className="flex flex-col items-end gap-2">
-          <Badge 
-            className={
-              instructor.is_available !== false
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-gray-100 text-gray-800'
-            }
-          >
-            {instructor.is_available !== false ? 'Available' : 'Busy'}
-          </Badge>
-          
           {currentInstructorId === instructor.user_id && (
             <Badge variant="outline" className="text-xs">
               Current
@@ -181,11 +167,7 @@ export default function AssignInstructorModal({
           )}
 
           {/* Assign Error */}
-          {assignError && (
-            <Alert variant="destructive">
-              <AlertDescription>{assignError}</AlertDescription>
-            </Alert>
-          )}
+          <FormErrorAlert messages={assignErrors} />
 
           {/* Debug info - only in development */}
           {process.env.NODE_ENV === 'development' && !isLoading && (
@@ -202,12 +184,15 @@ export default function AssignInstructorModal({
               {instructors.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <GraduationCap className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>No instructors available</p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <p className="font-medium">No eligible instructors</p>
+                  <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+                    Only instructors who are active, have a connected bank account, and a 100% complete profile can be assigned.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={refetch}
-                    className="mt-2"
+                    className="mt-3"
                   >
                     Refresh
                   </Button>

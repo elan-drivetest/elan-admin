@@ -9,6 +9,7 @@ import CreateBookingModal from '@/components/modals/CreateBookingModal';
 import AssignInstructorModal from '@/components/modals/AssignInstructorModal';
 import LoadingState, { CardSkeleton } from '@/components/ui/loading-state';
 import ErrorBoundary from '@/components/ui/error-boundary';
+import CursorPagination from '@/components/ui/CursorPagination';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Calendar, Users, RefreshCw, Clock, Search } from 'lucide-react';
@@ -53,12 +54,12 @@ const transformBookingData = (booking: AdminBooking): EnhancedBookingData => ({
 export default function BookingsPage() {
   // API and state management
   const [searchParams, setSearchParams] = useState<AdminBookingsParams>({
-    limit: 50,
+    limit: 10,
     orderBy: 'created_at',
     orderDirection: 'desc'
   });
   
-  const { data: bookings, isLoading, error, refetch } = useAllBookings(searchParams);
+  const { data: bookings, meta, isLoading, error, refetch } = useAllBookings(searchParams);
   
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -77,20 +78,21 @@ export default function BookingsPage() {
     endDate: '',
   });
 
-  // Calculate metrics from real data
+  // Metrics are computed over the current page (the API doesn't return a grand
+  // total; the dashboard has the global analytics).
   const metrics = useMemo(() => {
-    const totalBookings = bookings.length;
+    const totalBookings = meta?.total ?? bookings.length;
     const uniqueInstructors = new Set(bookings.filter(b => b.instructor_id).map(b => b.instructor_id)).size;
     const totalRevenue = bookings.reduce((sum, b) => sum + b.total_price, 0);
     const pendingCount = bookings.filter(b => b.status === 'pending').length;
 
     return [
-      { title: 'Total bookings', value: totalBookings.toString(), icon: Calendar },
-      { title: 'Total instructors', value: uniqueInstructors.toString().padStart(2, '0'), icon: Users },
-      { title: 'Total Revenue', value: `$${(totalRevenue / 100).toLocaleString()}`, icon: RefreshCw },
-      { title: 'Pending bookings', value: pendingCount.toString().padStart(2, '0'), icon: Clock }
+      { title: meta?.total ? 'Total bookings' : 'Bookings (page)', value: totalBookings.toString(), icon: Calendar },
+      { title: 'Instructors (page)', value: uniqueInstructors.toString().padStart(2, '0'), icon: Users },
+      { title: 'Revenue (page)', value: `$${(totalRevenue / 100).toLocaleString()}`, icon: RefreshCw },
+      { title: 'Pending (page)', value: pendingCount.toString().padStart(2, '0'), icon: Clock }
     ];
-  }, [bookings]);
+  }, [bookings, meta]);
 
   // Handle search and filter updates
   const handleApplyFilters = () => {
@@ -102,19 +104,30 @@ export default function BookingsPage() {
       status: filters.status || undefined,
       test_result: filters.test_result || undefined,
       testType: filters.testType || undefined,
-      startDate: filters.startDate || undefined,
-      endDate: filters.endDate || undefined,
+      // datetime-local → ISO for the backend.
+      startDate: filters.startDate ? new Date(filters.startDate).toISOString() : undefined,
+      endDate: filters.endDate ? new Date(filters.endDate).toISOString() : undefined,
+      // Reset pagination when filters change.
+      cursor: undefined,
+      direction: undefined,
     };
-    
+
     // Remove undefined values
     Object.keys(updatedParams).forEach(key => {
       if (updatedParams[key as keyof AdminBookingsParams] === undefined) {
         delete updatedParams[key as keyof AdminBookingsParams];
       }
     });
-    
+
     setSearchParams(updatedParams);
     refetch(updatedParams);
+  };
+
+  // Cursor pagination
+  const goToPage = (cursor: string, direction: 'forward' | 'backward') => {
+    const next = { ...searchParams, cursor, direction };
+    setSearchParams(next);
+    refetch(next);
   };
 
   // Handle filter changes
@@ -230,12 +243,16 @@ export default function BookingsPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary text-sm"
                 >
                   <option value="">All Statuses</option>
+                  <option value="draft">Draft</option>
                   <option value="pending">Pending</option>
                   <option value="confirmed">Confirmed</option>
-                  <option value="active">Active</option>
                   <option value="in_progress">In Progress</option>
-                  <option value="completed">Completed</option>
+                  <option value="succeeded">Succeeded</option>
+                  <option value="partially_refunded">Partially Refunded</option>
+                  <option value="refunded">Refunded</option>
+                  <option value="failed">Failed</option>
                   <option value="cancelled">Cancelled</option>
+                  <option value="expired">Expired</option>
                 </select>
               </div>
 
@@ -326,7 +343,7 @@ export default function BookingsPage() {
 
           {/* All Bookings Table */}
           <EnhancedBookingsTable
-            title={`All Bookings (${transformedBookings.length})`}
+            title={`All Bookings (${meta?.total ?? transformedBookings.length})`}
             data={transformedBookings}
             showCreateButton={false}
             isLoading={isLoading}
@@ -335,6 +352,14 @@ export default function BookingsPage() {
               setIsAssignModalOpen(true);
             }}
             onRefresh={() => refetch()}
+          />
+
+          <CursorPagination
+            meta={meta}
+            count={transformedBookings.length}
+            isLoading={isLoading}
+            onNext={() => meta?.nextCursor && goToPage(meta.nextCursor, 'forward')}
+            onPrev={() => meta?.prevCursor && goToPage(meta.prevCursor, 'backward')}
           />
         </div>
 

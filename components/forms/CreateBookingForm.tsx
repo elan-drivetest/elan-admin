@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, X, AlertTriangle, Check, MapPin, Calendar, User } from 'lucide-react';
@@ -18,6 +17,8 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 import FileUploader from '@/components/ui/FileUploader';
 import { useAddons, useCustomers, useBookingInstructors } from '@/hooks/useAdmin';
 import { bookingUtils } from '@/lib/utils/booking-calculations';
+import { getApiErrorMessages } from '@/lib/utils';
+import FormErrorAlert from '@/components/ui/form-error-alert';
 import TestCenterDropdownAdmin from '@/components/booking/TestCenterDropdownAdmin';
 import LocationSelectionAdmin from '@/components/booking/LocationSelectionAdmin';
 import AddOnSelectionAdmin from '@/components/booking/AddOnSelectionAdmin';
@@ -38,25 +39,28 @@ const createBookingSchema = z.object({
   instructor_id: z.number().optional(),
   addon_id: z.number().optional(),
   coupon_code: z.string().optional(),
-  road_test_doc_url: z.string().optional(),
-  g1_license_doc_url: z.string().optional(),
+  // Backend requires both documents as valid URLs.
+  road_test_doc_url: z.string().min(1, 'Road test document is required').url('Upload a valid road test document'),
+  g1_license_doc_url: z.string().min(1, 'License document is required').url('Upload a valid license document'),
   timezone: z.string(),
-});
+}).refine(
+  (d) => d.meet_at_center || !!(d.pickup_address && d.pickup_address.trim()),
+  { message: 'Select a pickup address (or choose "Meet at test center")', path: ['pickup_address'] },
+);
 
 type CreateBookingFormData = z.infer<typeof createBookingSchema>;
 
 interface CreateBookingFormProps {
   onSuccess?: (booking: any) => void;
-  onError?: (error: string) => void;
-  onLoading?: () => void;
   onCancel?: () => void;
 }
 
-export default function CreateBookingForm({ onSuccess, onError, onLoading, onCancel }: CreateBookingFormProps) {
+export default function CreateBookingForm({ onSuccess, onCancel }: CreateBookingFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessages, setErrorMessages] = useState<string[]>([]);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [formDataToSubmit, setFormDataToSubmit] = useState<CreateBookingFormData | null>(null);
+  const errorRef = React.useRef<HTMLDivElement>(null);
   
   // Enhanced state management
   const [selectedTestCenter, setSelectedTestCenter] = useState<TestCenter | null>(null);
@@ -139,7 +143,7 @@ export default function CreateBookingForm({ onSuccess, onError, onLoading, onCan
     coordinates: { lat: number; lng: number };
     distance?: number;
   }) => {
-    setValue('pickup_address', location.address);
+    setValue('pickup_address', location.address, { shouldValidate: true });
     setValue('pickup_latitude', location.coordinates.lat);
     setValue('pickup_longitude', location.coordinates.lng);
     setValue('pickup_distance', location.distance);
@@ -172,8 +176,7 @@ export default function CreateBookingForm({ onSuccess, onError, onLoading, onCan
     try {
       setShowConfirmation(false); // Close confirmation modal
       setIsLoading(true); // Set local loading
-      onLoading?.(); // Trigger parent loading state
-      setError(null);
+      setErrorMessages([]);
       
       const formattedDate = formDataToSubmit.test_date.replace('T', ' ') + ':00';
       
@@ -196,9 +199,11 @@ export default function CreateBookingForm({ onSuccess, onError, onLoading, onCan
       
     } catch (error: any) {
       console.error('Create booking error:', error);
-      const errorMessage = error?.response?.data?.message || 'Failed to create booking. Please try again.';
-      setError(errorMessage);
-      onError?.(errorMessage);
+      setErrorMessages(getApiErrorMessages(error));
+      // Bring the error into view since the form is long.
+      requestAnimationFrame(() => {
+        errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
     } finally {
       setIsLoading(false);
     }
@@ -303,6 +308,9 @@ export default function CreateBookingForm({ onSuccess, onError, onLoading, onCan
               onLocationSelect={handleLocationSelect}
               testCenter={selectedTestCenter || undefined}
             />
+            {errors.pickup_address && (
+              <p className="text-sm text-red-600 -mt-3">{errors.pickup_address.message}</p>
+            )}
 
             {/* Add-on Selection */}
             <AddOnSelectionAdmin
@@ -320,47 +328,62 @@ export default function CreateBookingForm({ onSuccess, onError, onLoading, onCan
             />
 
             {/* Instructor Selection */}
-            <SearchableSelect
-              label="Instructor (Optional)"
-              options={instructors.map(instructor => ({
-                id: instructor.user_id,
-                label: instructor.fullName,
-                subtitle: instructor.phoneNumber,
-                badge: instructor.rating ? `★ ${instructor.rating.toFixed(1)}` : undefined
-              }))}
-              value={watch('instructor_id') || null}
-              onSelect={(value) => setValue('instructor_id', value as number | undefined)}
-              placeholder="Select an instructor (optional)"
-              required={false}
-              isLoading={instructorsLoading}
-              allowClear={true}
-            />
+            <div>
+              <SearchableSelect
+                label="Instructor (Optional)"
+                options={instructors.map(instructor => ({
+                  id: instructor.user_id,
+                  label: instructor.fullName,
+                  subtitle: instructor.phoneNumber,
+                  badge: instructor.rating ? `★ ${instructor.rating.toFixed(1)}` : undefined
+                }))}
+                value={watch('instructor_id') || null}
+                onSelect={(value) => setValue('instructor_id', value as number | undefined)}
+                placeholder="Select an instructor (optional)"
+                required={false}
+                isLoading={instructorsLoading}
+                allowClear={true}
+              />
+              {!instructorsLoading && instructors.length === 0 && (
+                <p className="text-xs text-gray-400 mt-1">
+                  No eligible instructors — only active, bank-connected instructors with a 100% complete profile can be assigned.
+                </p>
+              )}
+            </div>
 
             {/* Document Uploads */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FileUploader
-                label="Road Test Document"
-                value={watch('road_test_doc_url') || ''}
-                onUpload={(url) => setValue('road_test_doc_url', url)}
-                acceptedTypes={['image/*', '.pdf']}
-                required={true}
-              />
+              <div>
+                <FileUploader
+                  label="Road Test Document"
+                  value={watch('road_test_doc_url') || ''}
+                  onUpload={(url) => setValue('road_test_doc_url', url, { shouldValidate: true })}
+                  acceptedTypes={['image/*', '.pdf']}
+                  required={true}
+                />
+                {errors.road_test_doc_url && (
+                  <p className="text-sm text-red-600 mt-1">{errors.road_test_doc_url.message}</p>
+                )}
+              </div>
 
-              <FileUploader
-                label={`${testType} License Document`}
-                value={watch('g1_license_doc_url') || ''}
-                onUpload={(url) => setValue('g1_license_doc_url', url)}
-                acceptedTypes={['image/*', '.pdf']}
-                required={true}
-              />
+              <div>
+                <FileUploader
+                  label={`${testType} License Document`}
+                  value={watch('g1_license_doc_url') || ''}
+                  onUpload={(url) => setValue('g1_license_doc_url', url, { shouldValidate: true })}
+                  acceptedTypes={['image/*', '.pdf']}
+                  required={true}
+                />
+                {errors.g1_license_doc_url && (
+                  <p className="text-sm text-red-600 mt-1">{errors.g1_license_doc_url.message}</p>
+                )}
+              </div>
             </div>
 
             {/* Error Display */}
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+            <div ref={errorRef}>
+              <FormErrorAlert messages={errorMessages} />
+            </div>
 
             {/* Action Buttons */}
             <div className="flex items-center gap-3 pt-4">

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { MoreVertical, Gift, Search, RefreshCw, User, Mail, Phone, Calendar, DollarSign, MapPin, Car } from 'lucide-react';
+import { ChevronRight, Gift, Search, RefreshCw, User, Mail, Phone, Calendar, MapPin, Car } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -16,8 +16,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { TableSkeleton } from '@/components/ui/loading-state';
-import Link from 'next/link';
-import type { AdminCouponUsage, AdminCouponUsageParams } from '@/types/admin';
+import BookingDetailModal from '@/components/modals/BookingDetailModal';
+import { formatCAD } from '@/lib/utils';
+import type { AdminCouponUsage, AdminCouponUsageParams, AdminBooking } from '@/types/admin';
 
 interface CouponUsageTableProps {
   title: string;
@@ -26,6 +27,40 @@ interface CouponUsageTableProps {
   onSearch?: (params: Partial<AdminCouponUsageParams>) => void;
   onRefresh?: () => void;
   showCouponColumn?: boolean;
+  /** Map of coupon code -> real discount in cents (the usage record's discount_amount is unreliable). */
+  couponDiscounts?: Record<string, number>;
+}
+
+// Map a usage record into a (partial) AdminBooking for the detail modal.
+// There is no single-booking GET endpoint, so we surface what the usage row carries.
+function usageToBooking(usage: AdminCouponUsage, discount: number): AdminBooking {
+  return {
+    id: usage.booking_id,
+    user_id: 0,
+    full_name: usage.customer_name,
+    phone_number: usage.customer_phone,
+    instructor_full_name: usage.instructor_name || undefined,
+    test_center_id: 0,
+    test_center_name: usage.test_center_name,
+    test_center_address: '',
+    test_type: (usage.test_type as 'G2' | 'G') || 'G2',
+    test_date: usage.booking_date,
+    meet_at_center: usage.meet_at_center,
+    pickup_address: usage.pickup_address || undefined,
+    // No line-item breakdown in the usage record. Set base to the pre-coupon
+    // amount (charged + discount) so the modal's breakdown reconciles to the total.
+    base_price: usage.total_price + discount,
+    pickup_price: 0,
+    addons_price: 0,
+    total_price: usage.total_price,
+    status: usage.booking_status,
+    coupon_code: usage.coupon_code,
+    discount_amount: discount,
+    is_rescheduled: false,
+    timezone: 'America/Toronto',
+    created_at: usage.booking_created_at || usage.created_at,
+    updated_at: usage.booking_created_at || usage.created_at,
+  };
 }
 
 export default function CouponUsageTable({ 
@@ -34,21 +69,35 @@ export default function CouponUsageTable({
   isLoading = false,
   onSearch,
   onRefresh,
-  showCouponColumn = true
+  showCouponColumn = true,
+  couponDiscounts,
 }: CouponUsageTableProps) {
   const [customerSearch, setCustomerSearch] = useState('');
   const [couponSearch, setCouponSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [testTypeFilter, setTestTypeFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedBooking, setSelectedBooking] = useState<AdminBooking | null>(null);
+
+  // The usage record's discount_amount is unreliable; prefer the coupon's real discount.
+  const realDiscount = (usage: AdminCouponUsage): number =>
+    couponDiscounts?.[usage.coupon_code] ?? usage.discount_amount;
 
   const handleSearch = () => {
     if (onSearch) {
+      // The backend ANDs customer_name and customer_email, so sending the same term
+      // to both matches nothing. Route by whether the term looks like an email.
+      const term = customerSearch.trim();
+      const isEmail = term.includes('@');
       onSearch({
-        customer_name: customerSearch || undefined,
-        customer_email: customerSearch || undefined,
+        customer_name: term && !isEmail ? term : undefined,
+        customer_email: term && isEmail ? term : undefined,
         coupon_code: couponSearch || undefined,
         booking_status: statusFilter || undefined,
         test_type: testTypeFilter || undefined,
+        usage_date_from: dateFrom ? new Date(dateFrom).toISOString() : undefined,
+        usage_date_to: dateTo ? new Date(dateTo).toISOString() : undefined,
       });
     }
   };
@@ -74,10 +123,6 @@ export default function CouponUsageTable({
     return <Badge className={config.color}>{config.text}</Badge>;
   };
 
-  const formatPrice = (amount: number) => {
-    return `$${(amount / 100).toFixed(2)}`;
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -89,6 +134,7 @@ export default function CouponUsageTable({
   };
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -162,7 +208,16 @@ export default function CouponUsageTable({
               <option value="G2">G2</option>
               <option value="G">G (Full)</option>
             </select>
-            
+
+            <div>
+              <label className="text-xs text-gray-500">Used from</label>
+              <Input type="datetime-local" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} disabled={isLoading} className="text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Used to</label>
+              <Input type="datetime-local" value={dateTo} onChange={(e) => setDateTo(e.target.value)} disabled={isLoading} className="text-sm" />
+            </div>
+
             <div className="sm:col-span-2 lg:col-span-4">
               <Button onClick={handleSearch} disabled={isLoading} className="w-full sm:w-auto">
                 Search
@@ -200,7 +255,11 @@ export default function CouponUsageTable({
             </TableHeader>
             <TableBody>
               {data.map((usage) => (
-                <TableRow key={usage.id} className="hover:bg-gray-50">
+                <TableRow
+                  key={usage.id}
+                  onClick={() => setSelectedBooking(usageToBooking(usage, realDiscount(usage)))}
+                  className="hover:bg-gray-50 hover:cursor-pointer"
+                >
                   {showCouponColumn && (
                     <TableCell>
                       <div>
@@ -209,9 +268,8 @@ export default function CouponUsageTable({
                           <span className="font-mono font-medium">{usage.coupon_code}</span>
                         </div>
                         <p className="text-xs text-gray-500 mt-1">{usage.coupon_name}</p>
-                        <div className="flex items-center gap-1 mt-1">
-                          <DollarSign className="w-3 h-3 text-green-500" />
-                          <span className="text-sm font-medium text-green-600">{formatPrice(usage.discount_amount)}</span>
+                        <div className="mt-1">
+                          <span className="text-sm font-medium text-green-600">{formatCAD(realDiscount(usage))} off</span>
                         </div>
                       </div>
                     </TableCell>
@@ -264,17 +322,11 @@ export default function CouponUsageTable({
                   
                   <TableCell>
                     <div className="text-sm">
-                      <div className="flex items-center gap-1 font-medium">
-                        <DollarSign className="w-3 h-3 text-gray-400" />
-                        <span className="line-through text-gray-500">{formatPrice(usage.total_price)}</span>
+                      <div className="font-medium">
+                        <span className="line-through text-gray-500">{formatCAD(usage.total_price + realDiscount(usage))}</span>
                       </div>
-                      <div className="flex items-center gap-1 font-medium text-green-600">
-                        <DollarSign className="w-3 h-3" />
-                        <span>{formatPrice(usage.final_price)}</span>
-                      </div>
-                      <div className="text-xs text-red-600">
-                        Saved: {formatPrice(usage.discount_amount)}
-                      </div>
+                      <div className="font-medium text-green-600">{formatCAD(usage.total_price)}</div>
+                      <div className="text-xs text-red-600">Saved: {formatCAD(realDiscount(usage))}</div>
                     </div>
                   </TableCell>
                   
@@ -295,11 +347,7 @@ export default function CouponUsageTable({
                   </TableCell>
                   
                   <TableCell>
-                    <Link href={`/bookings?booking_id=${usage.booking_id}`}>
-                      <Button variant="ghost" size="sm" disabled={isLoading}>
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </Link>
+                    <ChevronRight className="w-4 h-4 text-gray-300" />
                   </TableCell>
                 </TableRow>
               ))}
@@ -308,5 +356,13 @@ export default function CouponUsageTable({
         )}
       </CardContent>
     </Card>
+
+    <BookingDetailModal
+      isOpen={selectedBooking !== null}
+      onClose={() => setSelectedBooking(null)}
+      booking={selectedBooking}
+      onBookingUpdate={onRefresh}
+    />
+    </>
   );
 }

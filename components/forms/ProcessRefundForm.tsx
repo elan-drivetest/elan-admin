@@ -8,9 +8,10 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import FormErrorAlert from '@/components/ui/form-error-alert';
 import { Loader2, DollarSign, CheckCircle, XCircle } from 'lucide-react';
 import { useUpdateRefund } from '@/hooks/useRefunds';
+import { getApiErrorMessages } from '@/lib/utils';
 import { RefundRequest, RefundStatus } from '@/types/refund';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -34,7 +35,7 @@ interface ProcessRefundFormProps {
 
 export default function ProcessRefundForm({ refund, onSuccess, onCancel }: ProcessRefundFormProps) {
   const { updateRefund, loading } = useUpdateRefund();
-  const [error, setError] = React.useState<string | null>(null);
+  const [errorMessages, setErrorMessages] = React.useState<string[]>([]);
 
   const {
     register,
@@ -60,7 +61,7 @@ export default function ProcessRefundForm({ refund, onSuccess, onCancel }: Proce
 
   const onSubmit: SubmitHandler<ProcessRefundFormData> = async (data) => {
     try {
-      setError(null);
+      setErrorMessages([]);
 
       // Use id if available, otherwise fallback to booking_id
       const refundIdentifier = refund.id ?? refund.booking_id;
@@ -76,10 +77,7 @@ export default function ProcessRefundForm({ refund, onSuccess, onCancel }: Proce
       }
     } catch (err: any) {
       console.error('Process refund error:', err);
-      setError(
-        err?.response?.data?.message ||
-        'Failed to process refund. Please try again.'
-      );
+      setErrorMessages(getApiErrorMessages(err));
     }
   };
 
@@ -195,11 +193,7 @@ export default function ProcessRefundForm({ refund, onSuccess, onCancel }: Proce
       </div>
 
       {/* Error Message */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      <FormErrorAlert messages={errorMessages} />
 
       {/* Action Buttons */}
       <div className="flex justify-end gap-3 pt-4 border-t">

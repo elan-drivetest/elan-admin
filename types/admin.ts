@@ -31,6 +31,21 @@ export interface PaginationParams {
   baseUrl?: string;
 }
 
+// Cursor pagination envelope returned by the backend list endpoints.
+export interface PaginationMeta {
+  limit: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  nextCursor?: string;
+  prevCursor?: string;
+  total?: number;
+}
+
+export interface Paginated<T> {
+  data: T[];
+  meta: PaginationMeta;
+}
+
 // Customer types
 export interface AdminCustomer {
   id: number;
@@ -224,42 +239,6 @@ export interface InstructorRecentRide {
   payment_processed_at: string;
 }
 
-// Instructor rides types
-export interface InstructorRide {
-  id: number;
-  booking_id: number;
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  total_distance: string;
-  total_hours: string;
-  hourly_rate: number;
-  instructor_earnings: number;
-  pickup_location: string;
-  dropoff_location: string;
-  test_type: string;
-  center_name: string;
-  payment_scheduled_at: string;
-  payment_processed_at: string;
-  created_at: string;
-}
-
-export interface AdminInstructorRidesParams extends PaginationParams {
-  customerName?: string;
-  bookingId?: string;
-  status?: string;
-  testType?: string;
-  centerName?: string;
-  startDate?: string;
-  endDate?: string;
-  minEarnings?: number;
-  maxEarnings?: number;
-}
-
-export type AdminInstructorRidesResponse = InstructorRide[];
 
 // Dropdown types
 export interface AdminUserDropdown {
@@ -304,6 +283,9 @@ export interface AdminBooking {
   road_test_doc_url?: string;
   g1_license_doc_url?: string;
   payment_url?: string;
+  // Real instructor economics (exposed to the admin group; may be absent on older API builds).
+  ride_price?: number; // Amount in cents
+  total_ride_hour?: number | string;
   created_at: string;
   updated_at: string;
 }
@@ -436,13 +418,23 @@ export interface RoutePoint {
   speed: number;
 }
 
-export interface AdminRideSessionDetail extends AdminRideSession {
+// The detail endpoint returns a different shape from the list — define it
+// standalone rather than extending AdminRideSession (which has list-only fields).
+export interface AdminRideSessionDetail {
+  id: number;
   userName: string;
+  instructorName: string;
+  centerName: string;
+  testType: string;
   testDate: string;
+  pickupLocation: string;
   dropLocation: string;
   userContact: string;
   instructorContact: string;
+  totalPrice: number;
   instructorPayments: number;
+  totalDistance: string;
+  totalHours: string;
   routePoints: RoutePoint[];
   routeImageUrl?: string | null;
   status?: string;
@@ -450,7 +442,8 @@ export interface AdminRideSessionDetail extends AdminRideSession {
 }
 
 export interface RegenerateRouteImageResponse {
-  routeImageUrl: string;
+  success?: boolean;
+  routeImageUrl: string | null;
   message?: string;
 }
 
@@ -469,15 +462,24 @@ export type AdminRideSessionDetailResponse = AdminRideSessionDetail;
 // Referral Code types
 export type ReferralCodeStatus = 'active' | 'claimed' | 'pending_payment' | 'partially_paid' | 'fully_paid' | 'expired';
 
+// Joined user objects the backend attaches to each referral code.
+export interface ReferralParty {
+  id: number;
+  full_name: string;
+  email: string;
+  phone_number: string;
+  address?: string | null;
+}
+
 export interface AdminReferralCode {
   id: number;
-  instructor_id: number;
+  instructor_id: number | null;
   code: string;
   amount: number;
   min_rides_required: number;
-  used_by_instructor_id?: number;
+  used_by_instructor_id?: number | null;
   referral_type?: 'instructor' | 'admin';
-  created_by_admin_id?: number;
+  created_by_admin_id?: number | null;
   status: ReferralCodeStatus;
   used_at?: string;
   rides_completed_count: number;
@@ -487,6 +489,8 @@ export interface AdminReferralCode {
   referee_payment_date?: string;
   created_at: string;
   updated_at: string;
+  referrer?: ReferralParty | null;
+  referee?: ReferralParty | null;
 }
 
 export interface AdminReferralCodesParams extends PaginationParams {
@@ -585,7 +589,7 @@ export interface CreateCouponRequest {
   is_failure_coupon: boolean;
   min_purchase_amount: number;
   start_date: string;
-  expires_at: string;
+  expires_at?: string; // optional — omit for a never-expiring coupon
 }
 
 export interface UpdateCouponRequest {
@@ -615,16 +619,25 @@ export interface TestCenter {
   lat: number | string; // API may return as string
   lng: number | string; // API may return as string
   base_price: number; // Amount in cents
+  // Only returned by the admin PUT endpoint, not the public list.
+  status?: string; // 'ACTIVE' | 'INACTIVE'
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type TestCentersResponse = TestCenter[];
 
-// Update Test Center request
+// Update Test Center request (PUT /drive-test-centers/admin/{id} — accepts a partial body)
 export interface UpdateTestCenterRequest {
+  name?: string;
   province?: string;
   city?: string;
   address?: string;
+  postal_code?: string;
+  lat?: number | string;
+  lng?: number | string;
   base_price?: number; // Amount in cents
+  status?: string; // 'ACTIVE' | 'INACTIVE'
 }
 
 // File Upload types

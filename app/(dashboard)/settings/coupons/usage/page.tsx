@@ -9,36 +9,50 @@ import LoadingState, { CardSkeleton } from '@/components/ui/loading-state';
 import ErrorBoundary from '@/components/ui/error-boundary';
 import { Button } from '@/components/ui/button';
 import { Gift, Users, DollarSign, Calendar, ArrowLeft } from 'lucide-react';
-import { useCouponUsage } from '@/hooks/useAdmin';
+import { useCouponUsage, useCoupons } from '@/hooks/useAdmin';
+import CursorPagination from '@/components/ui/CursorPagination';
 import type { AdminCouponUsageParams } from '@/types/admin';
 
 export default function CouponUsagePage() {
   const [searchParams, setSearchParams] = useState<AdminCouponUsageParams>({
-    limit: 50,
+    limit: 10,
     orderBy: 'created_at',
     orderDirection: 'desc'
   });
 
-  const { data: usageData, isLoading, error, refetch } = useCouponUsage(searchParams);
+  const { data: usageData, meta, isLoading, error, refetch } = useCouponUsage(searchParams);
+  // The usage record's discount_amount is unreliable; use each coupon's real discount.
+  const { data: coupons } = useCoupons({ limit: 100 });
+  const couponDiscounts = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    coupons.forEach((c) => { map[c.code] = c.discount; });
+    return map;
+  }, [coupons]);
 
   const metrics = React.useMemo(() => {
-    const totalUsages = usageData.length;
+    const totalUsages = meta?.total ?? usageData.length;
     const uniqueCoupons = new Set(usageData.map(u => u.coupon_code)).size;
-    const totalDiscount = usageData.reduce((sum, u) => sum + u.discount_amount, 0);
+    const totalDiscount = usageData.reduce((sum, u) => sum + (couponDiscounts[u.coupon_code] ?? u.discount_amount), 0);
     const uniqueCustomers = new Set(usageData.map(u => u.customer_email)).size;
 
     return [
-      { title: 'Total Usage', value: totalUsages.toString(), icon: Gift },
-      { title: 'Unique Coupons Used', value: uniqueCoupons.toString(), icon: Calendar },
-      { title: 'Total Discount Given', value: `$${(totalDiscount / 100).toLocaleString()}`, icon: DollarSign },
-      { title: 'Unique Customers', value: uniqueCustomers.toString(), icon: Users }
+      { title: meta?.total ? 'Total Usage' : 'Usage (page)', value: totalUsages.toString(), icon: Gift },
+      { title: 'Coupons (page)', value: uniqueCoupons.toString(), icon: Calendar },
+      { title: 'Discount (page)', value: `$${(totalDiscount / 100).toLocaleString()}`, icon: DollarSign },
+      { title: 'Customers (page)', value: uniqueCustomers.toString(), icon: Users }
     ];
-  }, [usageData]);
+  }, [usageData, meta, couponDiscounts]);
 
   const handleSearchUpdate = (newParams: Partial<AdminCouponUsageParams>) => {
-    const updatedParams = { ...searchParams, ...newParams };
+    const updatedParams = { ...searchParams, ...newParams, cursor: undefined, direction: undefined };
     setSearchParams(updatedParams);
     refetch(updatedParams);
+  };
+
+  const goToPage = (cursor: string, direction: 'forward' | 'backward') => {
+    const next = { ...searchParams, cursor, direction };
+    setSearchParams(next);
+    refetch(next);
   };
 
   if (isLoading && usageData.length === 0) {
@@ -88,13 +102,22 @@ export default function CouponUsagePage() {
             </div>
           )}
 
-          <CouponUsageTable 
-            title={`All Coupon Usage (${usageData.length})`}
+          <CouponUsageTable
+            title={`All Coupon Usage (${meta?.total ?? usageData.length})`}
             data={usageData}
             isLoading={isLoading}
             onSearch={handleSearchUpdate}
             onRefresh={() => refetch()}
             showCouponColumn={true}
+            couponDiscounts={couponDiscounts}
+          />
+
+          <CursorPagination
+            meta={meta}
+            count={usageData.length}
+            isLoading={isLoading}
+            onNext={() => meta?.nextCursor && goToPage(meta.nextCursor, 'forward')}
+            onPrev={() => meta?.prevCursor && goToPage(meta.prevCursor, 'backward')}
           />
 
           {!isLoading && usageData.length === 0 && (

@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/table';
 import { TableSkeleton } from '@/components/ui/loading-state';
 import BookingDetailModal from '@/components/modals/BookingDetailModal';
+import FilePreviewerModal from '@/components/modals/FilePreviewerModal';
+import { formatBookingStatus } from '@/lib/utils';
 import type { AdminBooking } from '@/types/admin';
 
 export interface EnhancedBookingData {
@@ -62,25 +64,11 @@ export default function EnhancedBookingsTable({
 }: EnhancedBookingsTableProps) {
   const [selectedBooking, setSelectedBooking] = useState<AdminBooking | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{ url: string; title: string } | null>(null);
 
   const getStatusDisplay = (status: string) => {
-    const statusConfig: Record<string, { color: string; text: string }> = {
-      'pending': { color: 'bg-yellow-100 text-yellow-800', text: 'Pending' },
-      'confirmed': { color: 'bg-green-100 text-green-800', text: 'Confirmed' },
-      'active': { color: 'bg-blue-100 text-blue-800', text: 'Active' },
-      'in_progress': { color: 'bg-purple-100 text-purple-800', text: 'In Progress' },
-      'completed': { color: 'bg-gray-100 text-gray-800', text: 'Completed' },
-      'cancelled': { color: 'bg-red-100 text-red-800', text: 'Cancelled' },
-    };
-
-    const config = statusConfig[status.toLowerCase()] || 
-                  { color: 'bg-gray-100 text-gray-800', text: status };
-
-    return (
-      <Badge className={config.color}>
-        {config.text}
-      </Badge>
-    );
+    const { className, label } = formatBookingStatus(status);
+    return <Badge className={className}>{label}</Badge>;
   };
 
   const getTestResultBadge = (result?: string) => {
@@ -101,11 +89,6 @@ export default function EnhancedBookingsTable({
     return `$${(price / 100).toFixed(2)} CAD`;
   };
 
-  const formatInstructorFee = (totalPrice: number) => {
-    // Assuming instructor fee is 25% of total price (adjust as needed)
-    const instructorFee = Math.round(totalPrice * 0.25);
-    return formatPrice(instructorFee);
-  };
 
   const formatPickupLocation = (booking: EnhancedBookingData) => {
     if (booking.pickupLocation.includes('Meet at Center')) {
@@ -259,11 +242,14 @@ export default function EnhancedBookingsTable({
                             </div>
                           </div>
                         ) : (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
+                          <Button
+                            size="sm"
+                            variant="outline"
                             className="text-xs"
-                            onClick={() => onAssignInstructor?.(booking.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAssignInstructor?.(booking.id);
+                            }}
                           >
                             <UserPlus className="w-3 h-3 mr-1" />
                             Assign
@@ -271,9 +257,13 @@ export default function EnhancedBookingsTable({
                         )}
                       </TableCell>
                       <TableCell>
-                        <span className="text-green-600 font-medium text-sm">
-                          {formatInstructorFee(booking.totalPrice)}
-                        </span>
+                        {booking.originalBooking.ride_price != null ? (
+                          <span className="text-green-600 font-medium text-sm">
+                            {formatPrice(booking.originalBooking.ride_price)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-sm" title="Not provided by the API yet">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {getStatusDisplay(booking.status)}
@@ -284,7 +274,10 @@ export default function EnhancedBookingsTable({
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => window.open(booking.roadTestDocUrl, '_blank')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewFile({ url: booking.roadTestDocUrl!, title: 'Road Test Document' });
+                              }}
                               title="Road Test Document"
                             >
                               <FileText className="w-3 h-3" />
@@ -294,7 +287,10 @@ export default function EnhancedBookingsTable({
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => window.open(booking.g1LicenseDocUrl, '_blank')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewFile({ url: booking.g1LicenseDocUrl!, title: 'G1 License Document' });
+                              }}
                               title="G1 License Document"
                             >
                               <IdCard className="w-3 h-3" />
@@ -303,10 +299,13 @@ export default function EnhancedBookingsTable({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
-                          onClick={() => handleViewDetails(booking)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewDetails(booking);
+                          }}
                         >
                           <MoreVertical className="w-4 h-4" />
                         </Button>
@@ -326,6 +325,14 @@ export default function EnhancedBookingsTable({
         onClose={() => setIsDetailModalOpen(false)}
         booking={selectedBooking}
         onBookingUpdate={onRefresh}
+      />
+
+      {/* Document Previewer Modal */}
+      <FilePreviewerModal
+        isOpen={!!previewFile}
+        onClose={() => setPreviewFile(null)}
+        fileUrl={previewFile?.url || null}
+        title={previewFile?.title || 'Document'}
       />
     </>
   );

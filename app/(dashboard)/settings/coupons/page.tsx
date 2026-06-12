@@ -10,35 +10,42 @@ import ErrorBoundary from '@/components/ui/error-boundary';
 import { Button } from '@/components/ui/button';
 import { Gift, Users, DollarSign, Calendar, Plus } from 'lucide-react';
 import { useCoupons } from '@/hooks/useAdmin';
+import CursorPagination from '@/components/ui/CursorPagination';
 import type { AdminCouponsParams } from '@/types/admin';
 
 export default function CouponsPage() {
   const [searchParams, setSearchParams] = useState<AdminCouponsParams>({
-    limit: 50,
+    limit: 10,
     orderBy: 'created_at',
     orderDirection: 'desc'
   });
 
-  const { data: coupons, isLoading, error, refetch } = useCoupons(searchParams);
+  const { data: coupons, meta, isLoading, error, refetch } = useCoupons(searchParams);
 
   const metrics = React.useMemo(() => {
-    const totalCoupons = coupons.length;
+    const totalCoupons = meta?.total ?? coupons.length;
     const activeCoupons = coupons.filter(c => c.is_active && !c.is_expired).length;
     const totalUsage = coupons.reduce((sum, c) => sum + c.usage_count, 0);
     const totalValue = coupons.reduce((sum, c) => sum + (c.discount * c.usage_count), 0);
 
     return [
-      { title: 'Total Coupons', value: totalCoupons.toString(), icon: Gift },
-      { title: 'Active Coupons', value: activeCoupons.toString(), icon: Calendar },
-      { title: 'Total Usage', value: totalUsage.toString(), icon: Users },
-      { title: 'Total Value', value: `$${(totalValue / 100).toLocaleString()}`, icon: DollarSign }
+      { title: meta?.total ? 'Total Coupons' : 'Coupons (page)', value: totalCoupons.toString(), icon: Gift },
+      { title: 'Active (page)', value: activeCoupons.toString(), icon: Calendar },
+      { title: 'Usage (page)', value: totalUsage.toString(), icon: Users },
+      { title: 'Value (page)', value: `$${(totalValue / 100).toLocaleString()}`, icon: DollarSign }
     ];
-  }, [coupons]);
+  }, [coupons, meta]);
 
   const handleSearchUpdate = (newParams: Partial<AdminCouponsParams>) => {
-    const updatedParams = { ...searchParams, ...newParams };
+    const updatedParams = { ...searchParams, ...newParams, cursor: undefined, direction: undefined };
     setSearchParams(updatedParams);
     refetch(updatedParams);
+  };
+
+  const goToPage = (cursor: string, direction: 'forward' | 'backward') => {
+    const next = { ...searchParams, cursor, direction };
+    setSearchParams(next);
+    refetch(next);
   };
 
   if (isLoading && coupons.length === 0) {
@@ -102,12 +109,20 @@ export default function CouponsPage() {
             </div>
           )}
 
-          <CouponsTable 
-            title={`All Coupons (${coupons.length})`}
+          <CouponsTable
+            title={`All Coupons (${meta?.total ?? coupons.length})`}
             data={coupons}
             isLoading={isLoading}
             onSearch={handleSearchUpdate}
             onRefresh={() => refetch()}
+          />
+
+          <CursorPagination
+            meta={meta}
+            count={coupons.length}
+            isLoading={isLoading}
+            onNext={() => meta?.nextCursor && goToPage(meta.nextCursor, 'forward')}
+            onPrev={() => meta?.prevCursor && goToPage(meta.prevCursor, 'backward')}
           />
         </div>
       </div>

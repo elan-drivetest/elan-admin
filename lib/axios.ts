@@ -51,12 +51,13 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // If already refreshing, queue this request
+    // If already refreshing, queue this request and retry once the refresh resolves.
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       })
         .then(() => {
+          originalRequest._retry = true; // don't let the retried request trigger another refresh
           return apiClient(originalRequest);
         })
         .catch((err) => {

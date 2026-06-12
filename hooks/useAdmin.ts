@@ -3,18 +3,18 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { adminService } from '@/services/admin';
+import { getApiErrorMessages } from '@/lib/utils';
 import type {
+  PaginationMeta,
   AdminCustomersResponse,
   AdminInstructorsResponse,
   AdminCustomerDetailResponse,
   AdminInstructorDetailResponse,
-  AdminInstructorRidesResponse,
   AdminUsersDropdownResponse,
   AdminBookingsResponse,
   AdminBookingInstructorsResponse,
   AdminCustomersParams,
   AdminInstructorsParams,
-  AdminInstructorRidesParams,
   AdminBookingsParams,
   ApiError,
   DashboardAnalyticsResponse,
@@ -73,6 +73,7 @@ export function useRecentBookings(params?: AdminBookingsParams) {
 // Updated hook for fetching all bookings with parameters
 export function useAllBookings(params?: AdminBookingsParams) {
   const [data, setData] = useState<AdminBookingsResponse>([]);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -81,14 +82,16 @@ export function useAllBookings(params?: AdminBookingsParams) {
       setIsLoading(true);
       setError(null);
       const response = await adminService.getAllBookings(newParams || params);
-      setData(Array.isArray(response) ? response : []);
+      setData(response.data);
+      setMeta(response.meta);
     } catch (err: any) {
       console.error('All bookings fetch error:', err);
       setError({
-        message: err?.response?.data?.message || 'Failed to fetch bookings',
+        message: getApiErrorMessages(err)[0],
         code: 'FETCH_ALL_BOOKINGS_ERROR'
       });
       setData([]);
+      setMeta(null);
     } finally {
       setIsLoading(false);
     }
@@ -98,7 +101,25 @@ export function useAllBookings(params?: AdminBookingsParams) {
     fetchAllBookings();
   }, []);
 
-  return { data, isLoading, error, refetch: fetchAllBookings };
+  return { data, meta, isLoading, error, refetch: fetchAllBookings };
+}
+
+// An instructor may be assigned to a booking only when fully onboarded:
+// active account, completed profile, and a connected bank (Stripe payouts + charges).
+export function isInstructorAssignable(d: {
+  status?: string;
+  profile_completion_percentage?: number;
+  stripe_payouts_enabled?: boolean;
+  stripe_charges_enabled?: boolean;
+} | null | undefined): boolean {
+  return (
+    !!d 
+    // will uncomment all these in production
+    // && d.status === 'ACTIVE' 
+    // && d.profile_completion_percentage === 100
+    // && d.stripe_payouts_enabled === true 
+    // && d.stripe_charges_enabled === true
+  );
 }
 
 // Custom hook for fetching available instructors for booking assignment
@@ -112,11 +133,35 @@ export function useBookingInstructors() {
     try {
       setIsLoading(true);
       setError(null);
-      
-      console.log('Fetching booking instructors...');
+
       const response = await adminService.getBookingInstructors();
-      console.log('Booking instructors response:', response);
-      setData(Array.isArray(response) ? response : []);
+      const list = Array.isArray(response) ? response : [];
+
+      // The dropdown endpoint only returns id/name/phone, so enrich each
+      // candidate with its detail to apply the assignability guard.
+      const enriched = await Promise.all(
+        list.map(async (instructor) => {
+          try {
+            const detail = await adminService.getInstructorById(String(instructor.user_id));
+            return { instructor, detail };
+          } catch {
+            return { instructor, detail: null };
+          }
+        })
+      );
+
+      const eligible = enriched
+        .filter(({ detail }) => isInstructorAssignable(detail))
+        .map(({ instructor, detail }) => ({
+          ...instructor,
+          email: detail!.email,
+          rating: detail!.rating,
+          vehicle_info: detail!.vehicle
+            ? `${detail!.vehicle.year} ${detail!.vehicle.brand} ${detail!.vehicle.model}`
+            : undefined,
+        }));
+
+      setData(eligible);
     } catch (err: any) {
       console.error('Booking instructors fetch error:', err);
       
@@ -153,6 +198,7 @@ export function useBookingInstructors() {
 // Custom hook for fetching customers with parameters
 export function useCustomers(params?: AdminCustomersParams) {
   const [data, setData] = useState<AdminCustomersResponse>([]);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -161,15 +207,16 @@ export function useCustomers(params?: AdminCustomersParams) {
       setIsLoading(true);
       setError(null);
       const response = await adminService.getCustomers(newParams || params);
-      // Ensure response is always an array
-      setData(Array.isArray(response) ? response : []);
+      setData(response.data);
+      setMeta(response.meta);
     } catch (err: any) {
       console.error('Customers fetch error:', err);
       setError({
-        message: err?.response?.data?.message || 'Failed to fetch customers',
+        message: getApiErrorMessages(err)[0],
         code: 'FETCH_CUSTOMERS_ERROR'
       });
-      setData([]); // Set empty array on error
+      setData([]);
+      setMeta(null);
     } finally {
       setIsLoading(false);
     }
@@ -179,12 +226,13 @@ export function useCustomers(params?: AdminCustomersParams) {
     fetchCustomers();
   }, []);
 
-  return { data, isLoading, error, refetch: fetchCustomers };
+  return { data, meta, isLoading, error, refetch: fetchCustomers };
 }
 
 // Custom hook for fetching instructors with parameters
 export function useInstructors(params?: AdminInstructorsParams) {
   const [data, setData] = useState<AdminInstructorsResponse>([]);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -193,15 +241,16 @@ export function useInstructors(params?: AdminInstructorsParams) {
       setIsLoading(true);
       setError(null);
       const response = await adminService.getInstructors(newParams || params);
-      // Ensure response is always an array
-      setData(Array.isArray(response) ? response : []);
+      setData(response.data);
+      setMeta(response.meta);
     } catch (err: any) {
       console.error('Instructors fetch error:', err);
       setError({
-        message: err?.response?.data?.message || 'Failed to fetch instructors',
+        message: getApiErrorMessages(err)[0],
         code: 'FETCH_INSTRUCTORS_ERROR'
       });
-      setData([]); // Set empty array on error
+      setData([]);
+      setMeta(null);
     } finally {
       setIsLoading(false);
     }
@@ -211,7 +260,7 @@ export function useInstructors(params?: AdminInstructorsParams) {
     fetchInstructors();
   }, []);
 
-  return { data, isLoading, error, refetch: fetchInstructors };
+  return { data, meta, isLoading, error, refetch: fetchInstructors };
 }
 
 // Custom hook for fetching customer detail
@@ -277,39 +326,6 @@ export function useInstructorDetail(id: string) {
 }
 
 // Custom hook for fetching instructor rides
-export function useInstructorRides(id: string, params?: AdminInstructorRidesParams) {
-  const [data, setData] = useState<AdminInstructorRidesResponse>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<ApiError | null>(null);
-
-  const fetchRides = async (newParams?: AdminInstructorRidesParams) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const response = await adminService.getInstructorRides(id, newParams || params);
-      // Ensure response is always an array
-      setData(Array.isArray(response) ? response : []);
-    } catch (err: any) {
-      console.error('Instructor rides fetch error:', err);
-      setError({
-        message: err?.response?.data?.message || 'Failed to fetch instructor rides',
-        code: 'FETCH_INSTRUCTOR_RIDES_ERROR'
-      });
-      setData([]); // Set empty array on error
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (id) {
-      fetchRides();
-    }
-  }, [id]);
-
-  return { data, isLoading, error, refetch: fetchRides };
-}
-
 // Custom hook for fetching users dropdown
 export function useUsersDropdown() {
   const [data, setData] = useState<AdminUsersDropdownResponse>([]);
@@ -374,6 +390,7 @@ export function useDashboardAnalytics() {
 
 export function useRideSessions(params?: AdminRideSessionsParams) {
   const [data, setData] = useState<AdminRideSessionsResponse>([]);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -382,14 +399,16 @@ export function useRideSessions(params?: AdminRideSessionsParams) {
       setIsLoading(true);
       setError(null);
       const response = await adminService.getRideSessions(newParams || params);
-      setData(Array.isArray(response) ? response : []);
+      setData(response.data);
+      setMeta(response.meta);
     } catch (err: any) {
       console.error('Ride sessions fetch error:', err);
       setError({
-        message: err?.response?.data?.message || 'Failed to fetch ride sessions',
+        message: getApiErrorMessages(err)[0],
         code: 'FETCH_RIDE_SESSIONS_ERROR'
       });
       setData([]);
+      setMeta(null);
     } finally {
       setIsLoading(false);
     }
@@ -399,7 +418,7 @@ export function useRideSessions(params?: AdminRideSessionsParams) {
     fetchRideSessions();
   }, []);
 
-  return { data, isLoading, error, refetch: fetchRideSessions };
+  return { data, meta, isLoading, error, refetch: fetchRideSessions };
 }
 
 export function useRideSessionDetail(id: string) {
@@ -436,6 +455,7 @@ export function useRideSessionDetail(id: string) {
 
 export function useReferralCodes(params?: AdminReferralCodesParams) {
   const [data, setData] = useState<AdminReferralCodesResponse>([]);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -444,14 +464,16 @@ export function useReferralCodes(params?: AdminReferralCodesParams) {
       setIsLoading(true);
       setError(null);
       const response = await adminService.getReferralCodes(newParams || params);
-      setData(Array.isArray(response) ? response : []);
+      setData(response.data);
+      setMeta(response.meta);
     } catch (err: any) {
       console.error('Referral codes fetch error:', err);
       setError({
-        message: err?.response?.data?.message || 'Failed to fetch referral codes',
+        message: getApiErrorMessages(err)[0],
         code: 'FETCH_REFERRAL_CODES_ERROR'
       });
       setData([]);
+      setMeta(null);
     } finally {
       setIsLoading(false);
     }
@@ -461,7 +483,7 @@ export function useReferralCodes(params?: AdminReferralCodesParams) {
     fetchReferralCodes();
   }, []);
 
-  return { data, isLoading, error, refetch: fetchReferralCodes };
+  return { data, meta, isLoading, error, refetch: fetchReferralCodes };
 }
 
 export function useReferralCodeDetail(id: string) {
@@ -498,6 +520,7 @@ export function useReferralCodeDetail(id: string) {
 
 export function useCoupons(params?: AdminCouponsParams) {
   const [data, setData] = useState<AdminCouponsResponse>([]);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -506,14 +529,16 @@ export function useCoupons(params?: AdminCouponsParams) {
       setIsLoading(true);
       setError(null);
       const response = await adminService.getCoupons(newParams || params);
-      setData(Array.isArray(response) ? response : []);
+      setData(response.data);
+      setMeta(response.meta);
     } catch (err: any) {
       console.error('Coupons fetch error:', err);
       setError({
-        message: err?.response?.data?.message || 'Failed to fetch coupons',
+        message: getApiErrorMessages(err)[0],
         code: 'FETCH_COUPONS_ERROR'
       });
       setData([]);
+      setMeta(null);
     } finally {
       setIsLoading(false);
     }
@@ -523,11 +548,12 @@ export function useCoupons(params?: AdminCouponsParams) {
     fetchCoupons();
   }, []);
 
-  return { data, isLoading, error, refetch: fetchCoupons };
+  return { data, meta, isLoading, error, refetch: fetchCoupons };
 }
 
 export function useExpiredCoupons(params?: AdminCouponsParams) {
   const [data, setData] = useState<AdminCouponsResponse>([]);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -536,13 +562,15 @@ export function useExpiredCoupons(params?: AdminCouponsParams) {
       setIsLoading(true);
       setError(null);
       const response = await adminService.getExpiredCoupons(newParams || params);
-      setData(Array.isArray(response) ? response : []);
+      setData(response.data);
+      setMeta(response.meta);
     } catch (err: any) {
       setError({
-        message: err?.response?.data?.message || 'Failed to fetch expired coupons',
+        message: getApiErrorMessages(err)[0],
         code: 'FETCH_EXPIRED_COUPONS_ERROR'
       });
       setData([]);
+      setMeta(null);
     } finally {
       setIsLoading(false);
     }
@@ -552,7 +580,7 @@ export function useExpiredCoupons(params?: AdminCouponsParams) {
     fetchExpiredCoupons();
   }, []);
 
-  return { data, isLoading, error, refetch: fetchExpiredCoupons };
+  return { data, meta, isLoading, error, refetch: fetchExpiredCoupons };
 }
 
 export function useCouponDetail(id: string) {
@@ -588,6 +616,7 @@ export function useCouponDetail(id: string) {
 
 export function useCouponUsage(params?: AdminCouponUsageParams) {
   const [data, setData] = useState<AdminCouponUsageResponse>([]);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -596,14 +625,16 @@ export function useCouponUsage(params?: AdminCouponUsageParams) {
       setIsLoading(true);
       setError(null);
       const response = await adminService.getCouponUsage(newParams || params);
-      setData(Array.isArray(response) ? response : []);
+      setData(response.data);
+      setMeta(response.meta);
     } catch (err: any) {
       console.error('Coupon usage fetch error:', err);
       setError({
-        message: err?.response?.data?.message || 'Failed to fetch coupon usage',
+        message: getApiErrorMessages(err)[0],
         code: 'FETCH_COUPON_USAGE_ERROR'
       });
       setData([]);
+      setMeta(null);
     } finally {
       setIsLoading(false);
     }
@@ -613,11 +644,12 @@ export function useCouponUsage(params?: AdminCouponUsageParams) {
     fetchCouponUsage();
   }, []);
 
-  return { data, isLoading, error, refetch: fetchCouponUsage };
+  return { data, meta, isLoading, error, refetch: fetchCouponUsage };
 }
 
 export function useCouponUsageById(id: string, params?: AdminCouponUsageParams) {
   const [data, setData] = useState<AdminCouponUsageResponse>([]);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -626,14 +658,16 @@ export function useCouponUsageById(id: string, params?: AdminCouponUsageParams) 
       setIsLoading(true);
       setError(null);
       const response = await adminService.getCouponUsageById(id, newParams || params);
-      setData(Array.isArray(response) ? response : []);
+      setData(response.data);
+      setMeta(response.meta);
     } catch (err: any) {
       console.error('Coupon usage by ID fetch error:', err);
       setError({
-        message: err?.response?.data?.message || 'Failed to fetch coupon usage details',
+        message: getApiErrorMessages(err)[0],
         code: 'FETCH_COUPON_USAGE_BY_ID_ERROR'
       });
       setData([]);
+      setMeta(null);
     } finally {
       setIsLoading(false);
     }
@@ -645,7 +679,7 @@ export function useCouponUsageById(id: string, params?: AdminCouponUsageParams) 
     }
   }, [id]);
 
-  return { data, isLoading, error, refetch: fetchCouponUsageById };
+  return { data, meta, isLoading, error, refetch: fetchCouponUsageById };
 }
 
 export function useTestCenters() {
@@ -855,6 +889,7 @@ export function useSystemSettings() {
 // Hook for fetching all users (admin, customer, instructor)
 export function useAllUsers(params?: AdminAllUsersParams) {
   const [data, setData] = useState<AdminAllUsersResponse>([]);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -863,14 +898,16 @@ export function useAllUsers(params?: AdminAllUsersParams) {
       setIsLoading(true);
       setError(null);
       const response = await adminService.getAllUsers(newParams || params);
-      setData(Array.isArray(response) ? response : []);
+      setData(response.data);
+      setMeta(response.meta);
     } catch (err: any) {
       console.error('All users fetch error:', err);
       setError({
-        message: err?.response?.data?.message || 'Failed to fetch users',
+        message: getApiErrorMessages(err)[0],
         code: 'FETCH_ALL_USERS_ERROR'
       });
       setData([]);
+      setMeta(null);
     } finally {
       setIsLoading(false);
     }
@@ -880,7 +917,7 @@ export function useAllUsers(params?: AdminAllUsersParams) {
     fetchAllUsers();
   }, []);
 
-  return { data, isLoading, error, refetch: fetchAllUsers };
+  return { data, meta, isLoading, error, refetch: fetchAllUsers };
 }
 
 // Hook for updating user status

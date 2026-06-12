@@ -18,6 +18,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { adminService } from '@/services/admin';
+import { getApiErrorMessage } from '@/lib/utils';
 import type { SystemSetting, UpdateSystemSettingRequest } from '@/types/admin';
 
 interface SystemSettingsSectionProps {
@@ -58,8 +59,9 @@ const getSettingColor = (key: string) => {
 
 const formatValue = (key: string, value: string) => {
   if (key.includes('rate') || key.includes('price')) {
-    const numValue = parseInt(value);
-    return `$${(numValue / 100).toFixed(2)} CAD`;
+    const numValue = parseInt(value, 10);
+    // Guard against non-numeric setting values so we never render "$NaN".
+    return isNaN(numValue) ? value : `$${(numValue / 100).toFixed(2)} CAD`;
   }
   if (key.includes('distance')) return `${value} km`;
   if (key.includes('hour')) return `${value} km/h`;
@@ -108,7 +110,7 @@ const SettingCard = ({
         setIsEditing(false);
     } catch (err: any) {
         console.error('Update failed:', err);
-        setError(err?.response?.data?.message || err?.message || 'Failed to update setting');
+        setError(getApiErrorMessage(err));
     } finally {
         setIsLoading(false);
     }

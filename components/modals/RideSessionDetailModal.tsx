@@ -26,6 +26,8 @@ import { useRideSessionDetail } from '@/hooks/useAdmin';
 import { adminService } from '@/services/admin';
 import { TableSkeleton } from '@/components/ui/loading-state';
 import { toast } from 'sonner';
+import { getApiErrorMessages } from '@/lib/utils';
+import FilePreviewerModal from './FilePreviewerModal';
 interface RideSessionDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -40,6 +42,7 @@ export default function RideSessionDetailModal({
   const { data: session, isLoading, error, refetch } = useRideSessionDetail(sessionId || '');
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [routeImageUrl, setRouteImageUrl] = useState<string | null>(null);
+  const [isRoutePreviewOpen, setIsRoutePreviewOpen] = useState(false);
 
   // Sync route image URL from session data
   React.useEffect(() => {
@@ -56,13 +59,16 @@ export default function RideSessionDetailModal({
     setIsRegenerating(true);
     try {
       const response = await adminService.regenerateRouteImage(sessionId);
-      setRouteImageUrl(response.routeImageUrl);
-      toast.success('Route map generated successfully');
-      // Refetch session to update the data
-      refetch();
+      if (response.routeImageUrl) {
+        setRouteImageUrl(response.routeImageUrl);
+        toast.success(response.message || 'Route map generated successfully');
+        refetch();
+      } else {
+        toast.error(response.message || 'No route image could be generated for this session.');
+      }
     } catch (err: any) {
       console.error('Failed to regenerate route image:', err);
-      toast.error(err?.response?.data?.message || 'Failed to generate route map');
+      toast.error(getApiErrorMessages(err).join(' '));
     } finally {
       setIsRegenerating(false);
     }
@@ -84,6 +90,7 @@ export default function RideSessionDetailModal({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="min-w-7xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -165,7 +172,7 @@ export default function RideSessionDetailModal({
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => window.open(routeImageUrl, '_blank')}
+                          onClick={() => setIsRoutePreviewOpen(true)}
                           className="gap-1 shadow-md"
                         >
                           <ExternalLink className="w-3 h-3" />
@@ -245,11 +252,15 @@ export default function RideSessionDetailModal({
                       <span className="text-xs text-gray-500">Status</span>
                       <Badge className={
                         session.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        session.status === 'active' ? 'bg-blue-100 text-blue-800' :
+                        session.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                        session.status === 'scheduled' ? 'bg-yellow-100 text-yellow-800' :
+                        session.status === 'transferred' ? 'bg-purple-100 text-purple-800' :
                         session.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                         'bg-gray-100 text-gray-800'
                       }>
-                        {session.status ? session.status.charAt(0).toUpperCase() + session.status.slice(1) : 'Unknown'}
+                        {session.status
+                          ? session.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                          : 'Unknown'}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between">
@@ -263,6 +274,10 @@ export default function RideSessionDetailModal({
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-500">Distance</span>
                       <span className="text-sm font-medium">{parseFloat(session.totalDistance).toFixed(2)}km</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">GPS Points</span>
+                      <span className="text-sm font-medium">{session.routePoints?.length ?? 0}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -354,5 +369,14 @@ export default function RideSessionDetailModal({
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Route Image Previewer Modal */}
+    <FilePreviewerModal
+      isOpen={isRoutePreviewOpen}
+      onClose={() => setIsRoutePreviewOpen(false)}
+      fileUrl={routeImageUrl}
+      title="Route Tracking Map"
+    />
+    </>
   );
 }

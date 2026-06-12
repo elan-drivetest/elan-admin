@@ -5,13 +5,11 @@ import type {
   AdminInstructorsResponse,
   AdminCustomerDetailResponse,
   AdminInstructorDetailResponse,
-  AdminInstructorRidesResponse,
   AdminUsersDropdownResponse,
   AdminBookingsResponse,
   AdminBookingInstructorsResponse,
   AdminCustomersParams,
   AdminInstructorsParams,
-  AdminInstructorRidesParams,
   AdminBookingsParams,
   CreateBookingRequest,
   CreateBookingResponse,
@@ -51,22 +49,44 @@ import type {
   UpdateUserStatusRequest,
   UpdateUserStatusResponse,
   UpdateTestResultRequest,
-  UpdateTestResultResponse
+  UpdateTestResultResponse,
+  PaginationMeta,
+  AdminBooking,
+  AdminCustomer,
+  AdminInstructor,
+  AdminRideSession,
+  AdminCoupon,
+  AdminCouponUsage,
+  AdminReferralCode,
+  AdminUser
 } from '@/types/admin';
+
+const emptyMeta = (limit?: number): PaginationMeta => ({
+  limit: limit ?? 0,
+  hasNextPage: false,
+  hasPreviousPage: false,
+});
+
+/** Unwrap a `{ data, meta }` list response, tolerating older bare-array responses. */
+function unwrapPaginated<T>(raw: any, limit?: number): { data: T[]; meta: PaginationMeta } {
+  if (Array.isArray(raw)) return { data: raw, meta: emptyMeta(limit) };
+  return {
+    data: Array.isArray(raw?.data) ? raw.data : [],
+    meta: raw?.meta || emptyMeta(limit),
+  };
+}
 
 export const adminService = {
   // Get all customers with pagination and search
-  async getCustomers(params?: AdminCustomersParams): Promise<AdminCustomersResponse> {
+  async getCustomers(params?: AdminCustomersParams): Promise<{ data: AdminCustomer[]; meta: PaginationMeta }> {
     const response = await apiClient.get('/admin/users/customers', { params });
-    // Extract data array from wrapped response
-    return response.data.data || [];
+    return unwrapPaginated<AdminCustomer>(response.data, params?.limit);
   },
 
   // Get all instructors with pagination and search
-  async getInstructors(params?: AdminInstructorsParams): Promise<AdminInstructorsResponse> {
+  async getInstructors(params?: AdminInstructorsParams): Promise<{ data: AdminInstructor[]; meta: PaginationMeta }> {
     const response = await apiClient.get('/admin/users/instructors', { params });
-    // Extract data array from wrapped response
-    return response.data.data || [];
+    return unwrapPaginated<AdminInstructor>(response.data, params?.limit);
   },
 
   // Get customer details by ID
@@ -81,13 +101,6 @@ export const adminService = {
     return response.data;
   },
 
-  // Get instructor rides by instructor ID with pagination and filters
-  async getInstructorRides(id: string, params?: AdminInstructorRidesParams): Promise<AdminInstructorRidesResponse> {
-    const response = await apiClient.get(`/admin/users/instructors/${id}/rides`, { params });
-    // Extract data array from wrapped response
-    return response.data.data || [];
-  },
-
   // Get users dropdown data
   async getUsersDropdown(): Promise<AdminUsersDropdownResponse> {
     const response = await apiClient.get('/admin/users/dropdown');
@@ -100,9 +113,9 @@ export const adminService = {
     return response.data.data || [];
   },
 
-  async getAllBookings(params?: AdminBookingsParams): Promise<AdminBookingsResponse> {
+  async getAllBookings(params?: AdminBookingsParams): Promise<{ data: AdminBooking[]; meta: PaginationMeta }> {
     const response = await apiClient.get('/admin/bookings/all', { params });
-    return response.data.data || [];
+    return unwrapPaginated<AdminBooking>(response.data, params?.limit);
   },
 
   // Fix this method - ensure it returns the data correctly
@@ -122,8 +135,9 @@ export const adminService = {
     }
   },
 
-  async assignInstructor(data: AssignInstructorRequest): Promise<void> {
-    await apiClient.patch('/admin/bookings/assign-instructor', data);
+  async assignInstructor(data: AssignInstructorRequest): Promise<AdminBooking> {
+    const response = await apiClient.patch('/admin/bookings/assign-instructor', data);
+    return response.data;
   },
 
   async createBooking(data: CreateBookingRequest): Promise<CreateBookingResponse> {
@@ -138,9 +152,9 @@ export const adminService = {
   },
   
   // Ride session methods
-  async getRideSessions(params?: AdminRideSessionsParams): Promise<AdminRideSessionsResponse> {
+  async getRideSessions(params?: AdminRideSessionsParams): Promise<{ data: AdminRideSession[]; meta: PaginationMeta }> {
     const response = await apiClient.get('/admin/rides/sessions', { params });
-    return Array.isArray(response.data.data) ? response.data.data : [];
+    return unwrapPaginated<AdminRideSession>(response.data, params?.limit);
   },
 
   async getRideSessionById(id: string): Promise<AdminRideSessionDetailResponse> {
@@ -154,9 +168,9 @@ export const adminService = {
   },
 
   // Referral codes methods
-  async getReferralCodes(params?: AdminReferralCodesParams): Promise<AdminReferralCodesResponse> {
+  async getReferralCodes(params?: AdminReferralCodesParams): Promise<{ data: AdminReferralCode[]; meta: PaginationMeta }> {
     const response = await apiClient.get('/admin/referral-codes', { params });
-    return response.data.data || [];
+    return unwrapPaginated<AdminReferralCode>(response.data, params?.limit);
   },
 
   async getReferralCodeById(id: string): Promise<AdminReferralCodeDetailResponse> {
@@ -175,24 +189,24 @@ export const adminService = {
   },
 
   // Coupon methods
-  async getCoupons(params?: AdminCouponsParams): Promise<AdminCouponsResponse> {
+  async getCoupons(params?: AdminCouponsParams): Promise<{ data: AdminCoupon[]; meta: PaginationMeta }> {
     const response = await apiClient.get('/admin/coupons', { params });
-    return response.data.data || []; // Extract data array from wrapped response
+    return unwrapPaginated<AdminCoupon>(response.data, params?.limit);
   },
 
-  async getExpiredCoupons(params?: AdminCouponsParams): Promise<AdminCouponsResponse> {
+  async getExpiredCoupons(params?: AdminCouponsParams): Promise<{ data: AdminCoupon[]; meta: PaginationMeta }> {
     const response = await apiClient.get('/admin/coupons/expired', { params });
-    return response.data.data || [];
+    return unwrapPaginated<AdminCoupon>(response.data, params?.limit);
   },
 
-  async getCouponUsage(params?: AdminCouponUsageParams): Promise<AdminCouponUsageResponse> {
+  async getCouponUsage(params?: AdminCouponUsageParams): Promise<{ data: AdminCouponUsage[]; meta: PaginationMeta }> {
     const response = await apiClient.get('/admin/coupons/usage', { params });
-    return response.data.data || [];
+    return unwrapPaginated<AdminCouponUsage>(response.data, params?.limit);
   },
 
-  async getCouponUsageById(id: string, params?: AdminCouponUsageParams): Promise<AdminCouponUsageResponse> {
+  async getCouponUsageById(id: string, params?: AdminCouponUsageParams): Promise<{ data: AdminCouponUsage[]; meta: PaginationMeta }> {
     const response = await apiClient.get(`/admin/coupons/${id}/usage`, { params });
-    return response.data.data || [];
+    return unwrapPaginated<AdminCouponUsage>(response.data, params?.limit);
   },
 
   // These return single objects, so keep as is
@@ -223,18 +237,6 @@ export const adminService = {
     return response.data;
   },
 
-  // Address search
-  async searchAddress(data: AddressSearchRequest): Promise<AddressSearchResponse> {
-    const response = await apiClient.post('/address-search', data);
-    return response.data;
-  },
-
-  // Coupon verification
-  async verifyCoupon(data: CouponVerificationRequest): Promise<CouponVerificationResponse> {
-    const response = await apiClient.post('/coupons/verify', data);
-    return response.data;
-  },
-
   // Get all addons
   async getAddons(): Promise<AddonsResponse> {
     const response = await apiClient.get('/addons');
@@ -247,10 +249,34 @@ export const adminService = {
     return response.data;
   },
 
-  // ENHANCED: Coupon verification with better error handling
-  async verifyCouponCode(data: CouponVerificationRequest): Promise<CouponVerificationResponse> {
-    const response = await apiClient.post('/coupons/verify', data);
-    return response.data;
+  // NOTE: POST /coupons/verify is CUSTOMER-only (401s for admins). The admin panel
+  // verifies coupons via verifyCouponForAdmin() below — do not re-add a verify method here.
+
+  // Admin-side coupon verification.
+  // NOTE: POST /coupons/verify is a CUSTOMER-only endpoint and rejects admin
+  // tokens with 401 "unauthorised". The admin panel instead looks the coupon up
+  // through the admin coupons endpoint (bearer-auth) and validates it locally.
+  // The backend re-validates `coupon_code` when the booking is actually created.
+  async verifyCouponForAdmin(code: string): Promise<CouponVerificationResponse> {
+    const trimmed = code.trim();
+    const response = await apiClient.get('/admin/coupons', { params: { search: trimmed, limit: 50 } });
+    const list: AdminCouponsResponse = response.data?.data || [];
+    const coupon = list.find((c) => c.code?.toUpperCase() === trimmed.toUpperCase());
+
+    if (!coupon) {
+      throw new Error(`No coupon found with code "${trimmed}".`);
+    }
+    if (coupon.is_expired) {
+      throw new Error('This coupon has expired.');
+    }
+    if (!coupon.is_active) {
+      const start = coupon.start_date ? new Date(coupon.start_date) : null;
+      if (start && !isNaN(start.getTime()) && start.getTime() > Date.now()) {
+        throw new Error(`This coupon is not active yet — it starts on ${start.toLocaleDateString()}.`);
+      }
+      throw new Error('This coupon is not currently active.');
+    }
+    return coupon;
   },
 
   // Address search with better response handling
@@ -273,7 +299,6 @@ export const adminService = {
   // System Settings methods
   async getSystemSettings(): Promise<SystemSettingsResponse> {
     const response = await apiClient.get('/admin/settings');
-    console.log('Raw API response:', response.data);
     return Array.isArray(response.data) ? response.data : [];
   },
 
@@ -284,7 +309,6 @@ export const adminService = {
       try {
         const response = await apiClient.get(`/admin/settings/${id}`);
         if (response.data && response.data.key === key) {
-          console.log(`Found setting with key '${key}' at ID ${id}:`, response.data);
           return response.data;
         }
       } catch (error: any) {
@@ -298,8 +322,6 @@ export const adminService = {
   },
 
   async updateSystemSettingByKey(key: string, data: UpdateSystemSettingRequest): Promise<SystemSetting> {
-    console.log('Updating setting with key:', key, 'data:', data);
-    
     try {
       // Find the setting by iterating through possible IDs
       let foundId: number | null = null;
@@ -308,7 +330,6 @@ export const adminService = {
         try {
           const response = await apiClient.get(`/admin/settings/${id}`);
           if (response.data && response.data.key === key) {
-            console.log(`Found setting with key '${key}' at ID ${id}:`, response.data);
             foundId = id; // Use the ID from the URL, not from response.data.id
             break;
           }
@@ -323,12 +344,9 @@ export const adminService = {
       if (!foundId) {
         throw new Error(`Setting with key '${key}' not found`);
       }
-      
-      console.log(`Using ID ${foundId} for key '${key}'`);
-      
+
       // Now update using the found ID
       const response = await apiClient.put(`/admin/settings/${foundId}`, data);
-      console.log('Update successful:', response.data);
       return response.data;
       
     } catch (error: any) {
@@ -348,9 +366,9 @@ export const adminService = {
   },
 
   // Admin All Users methods
-  async getAllUsers(params?: AdminAllUsersParams): Promise<AdminAllUsersResponse> {
+  async getAllUsers(params?: AdminAllUsersParams): Promise<{ data: AdminUser[]; meta: PaginationMeta }> {
     const response = await apiClient.get('/admin/users/all', { params });
-    return response.data.data || [];
+    return unwrapPaginated<AdminUser>(response.data, params?.limit);
   },
 
   async updateUserStatus(id: number, data: UpdateUserStatusRequest): Promise<UpdateUserStatusResponse> {

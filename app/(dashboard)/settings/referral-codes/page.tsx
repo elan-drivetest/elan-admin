@@ -8,35 +8,42 @@ import LoadingState, { CardSkeleton } from '@/components/ui/loading-state';
 import ErrorBoundary from '@/components/ui/error-boundary';
 import { Gift, Users, DollarSign, CheckCircle } from 'lucide-react';
 import { useReferralCodes } from '@/hooks/useAdmin';
+import CursorPagination from '@/components/ui/CursorPagination';
 import type { AdminReferralCodesParams } from '@/types/admin';
 
 export default function ReferralCodesPage() {
   const [searchParams, setSearchParams] = useState<AdminReferralCodesParams>({
-    limit: 50,
+    limit: 10,
     orderBy: 'created_at',
     orderDirection: 'desc'
   });
 
-  const { data: referralCodes, isLoading, error, refetch } = useReferralCodes(searchParams);
+  const { data: referralCodes, meta, isLoading, error, refetch } = useReferralCodes(searchParams);
 
   const metrics = React.useMemo(() => {
-    const totalCodes = referralCodes.length;
+    const totalCodes = meta?.total ?? referralCodes.length;
     const activeCodes = referralCodes.filter(c => c.status === 'active').length;
     const claimedCodes = referralCodes.filter(c => c.status === 'claimed').length;
     const totalAmount = referralCodes.reduce((sum, c) => sum + c.amount, 0);
 
     return [
-      { title: 'Total Codes', value: totalCodes.toString(), icon: Gift },
-      { title: 'Active Codes', value: activeCodes.toString(), icon: Users },
-      { title: 'Claimed Codes', value: claimedCodes.toString(), icon: CheckCircle },
-      { title: 'Total Value', value: `$${(totalAmount / 100).toLocaleString()}`, icon: DollarSign }
+      { title: meta?.total ? 'Total Codes' : 'Codes (page)', value: totalCodes.toString(), icon: Gift },
+      { title: 'Active (page)', value: activeCodes.toString(), icon: Users },
+      { title: 'Claimed (page)', value: claimedCodes.toString(), icon: CheckCircle },
+      { title: 'Value (page)', value: `$${(totalAmount / 100).toLocaleString()}`, icon: DollarSign }
     ];
-  }, [referralCodes]);
+  }, [referralCodes, meta]);
 
   const handleSearchUpdate = (newParams: Partial<AdminReferralCodesParams>) => {
-    const updatedParams = { ...searchParams, ...newParams };
+    const updatedParams = { ...searchParams, ...newParams, cursor: undefined, direction: undefined };
     setSearchParams(updatedParams);
     refetch(updatedParams);
+  };
+
+  const goToPage = (cursor: string, direction: 'forward' | 'backward') => {
+    const next = { ...searchParams, cursor, direction };
+    setSearchParams(next);
+    refetch(next);
   };
 
   if (isLoading && referralCodes.length === 0) {
@@ -66,12 +73,20 @@ export default function ReferralCodesPage() {
             </div>
           )}
 
-          <ReferralCodesTable 
-            title={`All Referral Codes (${referralCodes.length})`}
+          <ReferralCodesTable
+            title={`All Referral Codes (${meta?.total ?? referralCodes.length})`}
             data={referralCodes}
             isLoading={isLoading}
             onSearch={handleSearchUpdate}
             onRefresh={() => refetch()}
+          />
+
+          <CursorPagination
+            meta={meta}
+            count={referralCodes.length}
+            isLoading={isLoading}
+            onNext={() => meta?.nextCursor && goToPage(meta.nextCursor, 'forward')}
+            onPrev={() => meta?.prevCursor && goToPage(meta.prevCursor, 'backward')}
           />
         </div>
       </div>

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { MoreVertical, Gift, Search, RefreshCw, Calendar, DollarSign, Users } from 'lucide-react';
+import { ChevronRight, Gift, Search, RefreshCw, Calendar, Users } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -16,7 +16,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { TableSkeleton } from '@/components/ui/loading-state';
-import Link from 'next/link';
+import CouponDetailModal from '@/components/modals/CouponDetailModal';
+import { formatCAD } from '@/lib/utils';
 import type { AdminCoupon, AdminCouponsParams } from '@/types/admin';
 
 interface CouponsTableProps {
@@ -37,13 +38,16 @@ export default function CouponsTable({
   const [searchTerm, setSearchTerm] = useState('');
   const [codeSearch, setCodeSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
 
   const handleSearch = () => {
     if (onSearch) {
       onSearch({
         search: searchTerm || undefined,
         code: codeSearch || undefined,
+        // "expired" maps to is_expired; active/inactive map to is_active.
         is_active: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
+        is_expired: statusFilter === 'expired' ? true : undefined,
       });
     }
   };
@@ -75,19 +79,16 @@ export default function CouponsTable({
     </div>
   );
 
-  const formatPrice = (amount: number) => {
-    return `$${(amount / 100).toFixed(2)}`;
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return 'No expiry';
+    const d = new Date(dateString);
+    return isNaN(d.getTime())
+      ? 'No expiry'
+      : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -179,7 +180,11 @@ export default function CouponsTable({
             </TableHeader>
             <TableBody>
               {data.map((coupon) => (
-                <TableRow key={coupon.id} className="hover:bg-gray-50">
+                <TableRow
+                  key={coupon.id}
+                  onClick={() => setSelectedCouponId(coupon.id.toString())}
+                  className="hover:bg-gray-50 hover:cursor-pointer"
+                >
                   <TableCell>
                     <div>
                       <p className="font-medium text-sm">{coupon.name}</p>
@@ -196,13 +201,10 @@ export default function CouponsTable({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1">
-                      <DollarSign className="w-3 h-3 text-green-500" />
-                      <span className="font-medium text-green-600">{formatPrice(coupon.discount)}</span>
-                    </div>
+                    <span className="font-medium text-green-600">{formatCAD(coupon.discount)}</span>
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm">{formatPrice(coupon.min_purchase_amount)}</span>
+                    <span className="text-sm">{formatCAD(coupon.min_purchase_amount)}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
@@ -225,11 +227,7 @@ export default function CouponsTable({
                     {getStatusBadge(coupon)}
                   </TableCell>
                   <TableCell>
-                    <Link href={`/settings/coupons/${coupon.id}`}>
-                      <Button variant="ghost" size="sm" disabled={isLoading}>
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </Link>
+                    <ChevronRight className="w-4 h-4 text-gray-300" />
                   </TableCell>
                 </TableRow>
               ))}
@@ -238,5 +236,13 @@ export default function CouponsTable({
         )}
       </CardContent>
     </Card>
+
+    <CouponDetailModal
+      isOpen={selectedCouponId !== null}
+      onClose={() => setSelectedCouponId(null)}
+      couponId={selectedCouponId}
+      onUpdate={onRefresh}
+    />
+    </>
   );
 }

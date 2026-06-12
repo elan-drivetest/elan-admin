@@ -157,7 +157,7 @@ export default function ReferralCodesTable({
               <TableHeader>
                 <TableRow>
                   <TableHead>Code</TableHead>
-                  <TableHead>Instructor ID</TableHead>
+                  <TableHead>Owner</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Min Rides</TableHead>
                   <TableHead>Rides Completed</TableHead>
@@ -177,10 +177,21 @@ export default function ReferralCodesTable({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Users className="w-3 h-3 text-gray-400" />
+                      {code.referrer ? (
+                        <div className="flex items-center gap-1">
+                          <Users className="w-3 h-3 text-gray-400" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{code.referrer.full_name}</p>
+                            <p className="text-xs text-gray-500 truncate">{code.referrer.email}</p>
+                          </div>
+                        </div>
+                      ) : code.referral_type === 'admin' ? (
+                        <span className="text-sm text-gray-500">Admin-created</span>
+                      ) : code.instructor_id ? (
                         <span className="text-sm">#{code.instructor_id}</span>
-                      </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">

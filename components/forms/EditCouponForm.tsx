@@ -9,10 +9,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import FormErrorAlert from '@/components/ui/form-error-alert';
 import { Loader2, Save, X, DollarSign, Calendar } from 'lucide-react';
 import { adminService } from '@/services/admin';
+import { getApiErrorMessages } from '@/lib/utils';
 import type { AdminCoupon } from '@/types/admin';
+
+/** Safely convert an API date (possibly null/invalid) to a `datetime-local` value, or '' if absent. */
+function toDatetimeLocal(value?: string | null): string {
+  if (!value) return '';
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 16);
+}
 
 const editCouponSchema = z.object({
   name: z.string().min(1, 'Coupon name is required').min(2, 'Name must be at least 2 characters'),
@@ -23,11 +31,11 @@ const editCouponSchema = z.object({
   is_failure_coupon: z.boolean(),
   min_purchase_amount: z.number().min(0, 'Minimum purchase amount must be positive'),
   start_date: z.string().min(1, 'Start date is required'),
-  expires_at: z.string().min(1, 'Expiration date is required'),
+  // Optional — a blank expiry means the coupon never expires.
+  expires_at: z.string().optional(),
 }).refine((data) => {
-  const startDate = new Date(data.start_date);
-  const endDate = new Date(data.expires_at);
-  return endDate > startDate;
+  if (!data.expires_at) return true;
+  return new Date(data.expires_at) > new Date(data.start_date);
 }, {
   message: "Expiration date must be after start date",
   path: ["expires_at"],
@@ -43,7 +51,7 @@ interface EditCouponFormProps {
 
 export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCouponFormProps) {
   const [isLoading, setIsLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [errorMessages, setErrorMessages] = React.useState<string[]>([]);
 
   const {
     register,
@@ -61,8 +69,9 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
       is_recurrent: coupon.is_recurrent,
       is_failure_coupon: coupon.is_failure_coupon,
       min_purchase_amount: coupon.min_purchase_amount,
-      start_date: new Date(coupon.start_date).toISOString().slice(0, 16),
-      expires_at: new Date(coupon.expires_at).toISOString().slice(0, 16),
+      // Guard against null/invalid dates — backend allows a null expiry.
+      start_date: toDatetimeLocal(coupon.start_date),
+      expires_at: toDatetimeLocal(coupon.expires_at),
     },
   });
 
@@ -72,23 +81,20 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
   const onSubmit: SubmitHandler<EditCouponFormData> = async (data) => {
     try {
       setIsLoading(true);
-      setError(null);
-      
+      setErrorMessages([]);
+
       const updateData = {
         ...data,
         start_date: new Date(data.start_date).toISOString(),
-        expires_at: new Date(data.expires_at).toISOString(),
+        expires_at: data.expires_at ? new Date(data.expires_at).toISOString() : undefined,
       };
-      
+
       await adminService.updateCoupon(coupon.id.toString(), updateData);
       onSuccess();
       
     } catch (error: any) {
       console.error('Update coupon error:', error);
-      setError(
-        error?.response?.data?.message || 
-        'Failed to update coupon. Please try again.'
-      );
+      setErrorMessages(getApiErrorMessages(error));
     } finally {
       setIsLoading(false);
     }
@@ -226,7 +232,7 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
 
         <div className="space-y-2">
           <Label htmlFor="expires_at" className="text-sm font-medium text-gray-700">
-            Expiration Date
+            Expiration Date <span className="text-gray-400 font-normal">(optional — leave blank for no expiry)</span>
           </Label>
           <div className="relative">
             <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -269,11 +275,7 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
       </div>
 
       {/* Error Alert */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      <FormErrorAlert messages={errorMessages} />
 
       {/* Action Buttons */}
       <div className="flex items-center gap-3 pt-4">

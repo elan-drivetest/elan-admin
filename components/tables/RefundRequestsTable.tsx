@@ -42,7 +42,8 @@ export default function RefundRequestsTable({
   const handleSearch = () => {
     if (onSearch) {
       onSearch({
-        customerName: searchTerm || undefined,
+        // Backend ignores `customerName`; free-text name search goes through `search`.
+        search: searchTerm || undefined,
         status: statusFilter || undefined,
         booking_id: bookingIdSearch ? parseInt(bookingIdSearch) : undefined,
       });
