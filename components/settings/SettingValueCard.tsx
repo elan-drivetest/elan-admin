@@ -6,23 +6,23 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import FormErrorAlert from '@/components/ui/form-error-alert';
-import { ArrowRight, Check, Loader2, Pencil, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Check, Loader2, Pencil, X } from 'lucide-react';
 import { adminService } from '@/services/admin';
 import { getApiErrorMessages } from '@/lib/utils';
-import { isPricingCriticalSetting } from '@/lib/pricing-config';
 import { invalidatePricingConfig } from '@/hooks/usePricingConfig';
 import {
   formatSettingValue,
-  fromEditorValue,
   getSettingCopy,
   getSettingEditorSpec,
-  getSettingUnit,
+  parseSettingInput,
   toEditorValue,
 } from '@/lib/settings-copy';
 import type { SystemSetting, UpdateSystemSettingRequest } from '@/types/admin';
 
 interface SettingValueCardProps {
   setting: SystemSetting;
+  /** One line of what the current value means in practice. */
+  inPractice?: string | null;
   /** One line of consequence for the typed value, e.g. a re-priced example trip. */
   describeImpact?: (nextValue: number) => string | null;
   onUpdated: () => void;
@@ -30,19 +30,19 @@ interface SettingValueCardProps {
 
 export default function SettingValueCard({
   setting,
+  inPractice,
   describeImpact,
   onUpdated,
 }: SettingValueCardProps) {
   const copy = getSettingCopy(setting.key);
-  const unit = getSettingUnit(setting.key);
-  const spec = getSettingEditorSpec(unit);
+  const spec = getSettingEditorSpec(setting.key);
 
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(() => toEditorValue(unit, setting.value));
+  const [editValue, setEditValue] = useState(() => toEditorValue(setting.key, setting.value));
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
-  const parsed = fromEditorValue(unit, editValue);
+  const parsed = parseSettingInput(setting.key, editValue);
   const isUnchanged = parsed.ok && parsed.storedValue === String(setting.value).trim();
   const impact = parsed.ok && !isUnchanged ? describeImpact?.(parsed.numericValue) : null;
 
@@ -53,6 +53,8 @@ export default function SettingValueCard({
     setErrors([]);
 
     try {
+      // `value` is @IsString() on the server with no implicit conversion — a JSON
+      // number 400s (ADMIN_SETTINGS.md §2.2), so it always goes as a string.
       const payload: UpdateSystemSettingRequest = { value: parsed.storedValue };
       await adminService.updateSystemSettingByKey(setting.key, payload);
 
@@ -72,25 +74,35 @@ export default function SettingValueCard({
     <Card className="h-full border-gray-200">
       <CardContent className="flex h-full flex-col gap-3 p-5">
         <div>
-          <h3 className="font-medium text-gray-900">{copy?.label ?? setting.name ?? setting.key}</h3>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-medium text-gray-900">
+              {copy?.label ?? setting.name ?? setting.key}
+            </h3>
+            {copy?.risk === 'high' && (
+              <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                High impact
+              </span>
+            )}
+          </div>
           <p className="mt-1 text-sm leading-relaxed text-gray-600">
             {copy?.meaning ?? setting.description}
           </p>
         </div>
 
-        <p className="text-2xl font-semibold tracking-tight text-gray-900">
-          {formatSettingValue(setting.key, setting.value)}
-        </p>
+        <div>
+          <p className="text-2xl font-semibold tracking-tight text-gray-900">
+            {formatSettingValue(setting.key, setting.value)}
+          </p>
+          {inPractice && <p className="mt-1 text-sm text-gray-500">{inPractice}</p>}
+        </div>
 
         {isEditing ? (
           <div className="mt-auto space-y-3">
-            {/* base_distance / base_rate / normal_rate take effect on the very
-                next booking with no deploy, and the customer app still hardcodes
-                them — so an edit here is a coordinated release. */}
-            {isPricingCriticalSetting(setting.key) && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs leading-relaxed text-amber-900">
-                Changes what customers are charged on the next booking. The customer app has its own
-                copy of this number — release both together.
+            {/* §4 blast radius: the admin is told what a save does before doing it */}
+            {copy?.warning && (
+              <p className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs leading-relaxed text-amber-900">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{copy.warning}</span>
               </p>
             )}
 
@@ -146,7 +158,7 @@ export default function SettingValueCard({
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setEditValue(toEditorValue(unit, setting.value));
+                  setEditValue(toEditorValue(setting.key, setting.value));
                   setErrors([]);
                   setIsEditing(false);
                 }}

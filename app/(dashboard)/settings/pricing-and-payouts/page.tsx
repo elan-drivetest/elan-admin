@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import ErrorBoundary from '@/components/ui/error-boundary';
 import LoadingState from '@/components/ui/loading-state';
 import SettingValueCard from '@/components/settings/SettingValueCard';
+import MissingSettingCard from '@/components/settings/MissingSettingCard';
 import { useSystemSettings } from '@/hooks/useAdmin';
 import { formatCAD } from '@/lib/utils';
 import { isPricingCriticalSetting, resolvePickupPricing } from '@/lib/pricing-config';
 import { calculatePickupPrice } from '@/lib/utils/booking-calculations';
-import { SETTING_ORDER, getSettingCopy } from '@/lib/settings-copy';
+import { SETTING_ORDER, describeInPractice, parseSettingValue } from '@/lib/settings-copy';
 
 /** Sample trips for the worked example — short, typical, and past the base distance. */
 const EXAMPLE_DISTANCES = [10, 30, 60];
@@ -22,17 +23,35 @@ export default function PricingAndPayoutsPage() {
   const rows = useMemo(() => (Array.isArray(data) ? data : []), [data]);
   const { config: pricing } = useMemo(() => resolvePickupPricing(rows), [rows]);
 
-  // Every row the server returns is shown — known keys first, in a sensible
-  // order, anything added later falls to the end rather than disappearing.
-  const ordered = useMemo(() => {
-    const rank = (key: string) => {
-      const index = SETTING_ORDER.indexOf(key);
-      return index === -1 ? SETTING_ORDER.length : index;
-    };
-    return [...rows].sort((a, b) => rank(a.key) - rank(b.key));
-  }, [rows]);
+  const byKey = useMemo(() => new Map(rows.map((row) => [row.key, row])), [rows]);
 
-  const missing = SETTING_ORDER.filter((key) => !rows.some((row) => row.key === key));
+  /**
+   * The values the system is really running on, for the worked one-liners. The
+   * pickup trio comes through the resolver so an absent row reports the fallback
+   * customers are actually being charged, not a blank.
+   */
+  const effectiveValues = useMemo<Record<string, number | null>>(() => {
+    const read = (key: string) => {
+      const raw = byKey.get(key)?.value;
+      return raw === undefined ? null : parseSettingValue(raw);
+    };
+    return {
+      base_distance: pricing.baseDistance,
+      base_rate: pricing.baseRate,
+      normal_rate: pricing.normalRate,
+      instructor_rate: read('instructor_rate'),
+      average_distance_per_hour: read('average_distance_per_hour'),
+      instructor_referral_price: read('instructor_referral_price'),
+      admin_referral_price: read('admin_referral_price'),
+      referral_min_rides: read('referral_min_rides'),
+    };
+  }, [byKey, pricing]);
+
+  /** Anything the backend added that this screen has no wording for yet. */
+  const extraRows = useMemo(
+    () => rows.filter((row) => !SETTING_ORDER.includes(row.key)),
+    [rows],
+  );
 
   /** One line of consequence, for the three numbers that price a pickup. */
   const describePickupImpact = (key: string) => (nextValue: number) => {
@@ -94,25 +113,32 @@ export default function PricingAndPayoutsPage() {
               </CardContent>
             </Card>
 
+            {/* The whole catalogue, present or not — an absent row is the thing
+                an admin most needs to see (ADMIN_SETTINGS.md §6). */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {ordered.map((setting) => (
+              {SETTING_ORDER.map((key) => {
+                const setting = byKey.get(key);
+                if (!setting) return <MissingSettingCard key={key} settingKey={key} />;
+
+                return (
+                  <SettingValueCard
+                    key={key}
+                    setting={setting}
+                    inPractice={describeInPractice(key, effectiveValues)}
+                    describeImpact={describePickupImpact(key)}
+                    onUpdated={() => refetch()}
+                  />
+                );
+              })}
+
+              {extraRows.map((setting) => (
                 <SettingValueCard
                   key={setting.key}
                   setting={setting}
-                  describeImpact={describePickupImpact(setting.key)}
                   onUpdated={() => refetch()}
                 />
               ))}
             </div>
-
-            {/* The seeder is all-or-nothing, so a key added later is simply absent */}
-            {missing.length > 0 && (
-              <p className="text-xs text-gray-500">
-                Not set up on the server:{' '}
-                {missing.map((key) => getSettingCopy(key)?.label ?? key).join(', ')}. The system uses
-                its built-in defaults for these until a developer adds the rows.
-              </p>
-            )}
           </>
         )}
       </div>

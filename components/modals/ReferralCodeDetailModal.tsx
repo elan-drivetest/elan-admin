@@ -19,7 +19,9 @@ import {
 } from 'lucide-react';
 import { useReferralCodeDetail } from '@/hooks/useAdmin';
 import { adminService } from '@/services/admin';
-import { getApiErrorMessage } from '@/lib/utils';
+import { getApiErrorMessage, formatCAD } from '@/lib/utils';
+import { resolveReferralPayout } from '@/lib/utils/referral-payout';
+import { useLivePeerReferralBonus } from '@/hooks/useReferralBonus';
 import type { UpdateReferralCodeStatusRequest } from '@/types/admin';
 
 interface ReferralCodeDetailModalProps {
@@ -27,6 +29,35 @@ interface ReferralCodeDetailModalProps {
   onClose: () => void;
   codeId: string | null;
   onSuccess?: () => void;
+}
+
+/**
+ * What this code will actually pay. A peer referral reads the live bonus setting
+ * at payout time and pays BOTH sides, ignoring the amount stored on the code
+ * (ADMIN_SETTINGS.md 4.1); an admin promo code pays its frozen amount, once.
+ */
+function PayoutSummary({
+  code,
+  livePeerBonus,
+}: {
+  code: { amount: number; referral_type?: 'instructor' | 'admin' };
+  livePeerBonus: number | null;
+}) {
+  const payout = resolveReferralPayout(code, livePeerBonus);
+
+  return (
+    <div>
+      <h4 className="font-medium text-sm text-gray-700 mb-2">Payout</h4>
+      <p className="text-lg font-medium text-green-600">
+        {formatCAD(payout.perSide, { suffix: false })}
+      </p>
+      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+        {payout.sides === 2
+          ? `Paid to the referrer and to the referee - ${formatCAD(payout.total, { suffix: false })} in all. Peer referrals are paid at the live bonus rate when the bonus is released, not the ${formatCAD(code.amount, { suffix: false })} stored on this code.`
+          : 'Paid once to the instructor who claims this code, at the amount frozen when it was created.'}
+      </p>
+    </div>
+  );
 }
 
 export default function ReferralCodeDetailModal({
@@ -83,9 +114,9 @@ export default function ReferralCodeDetailModal({
     return <Badge className={config.color}>{config.text}</Badge>;
   };
 
-  const formatPrice = (amount: number) => {
-    return `$${(amount / 100).toFixed(2)} CAD`;
-  };
+  const livePeerBonus = useLivePeerReferralBonus();
+
+  const formatPrice = (amount: number) => formatCAD(amount);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Not set';
@@ -145,13 +176,7 @@ export default function ReferralCodeDetailModal({
                     <h4 className="font-medium text-sm text-gray-700 mb-2">Code</h4>
                     <p className="text-lg font-mono bg-gray-100 px-3 py-2 rounded">{referralCode.code}</p>
                   </div>
-                  <div>
-                    <h4 className="font-medium text-sm text-gray-700 mb-2">Amount</h4>
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-green-500" />
-                      <span className="text-lg font-medium text-green-600">{formatPrice(referralCode.amount)}</span>
-                    </div>
-                  </div>
+                  <PayoutSummary code={referralCode} livePeerBonus={livePeerBonus} />
                   <div>
                     <h4 className="font-medium text-sm text-gray-700 mb-2">Owner</h4>
                     <div className="flex items-center gap-2">

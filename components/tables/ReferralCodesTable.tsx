@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Gift, Search, RefreshCw, Users, Calendar, DollarSign, Plus, ChevronRight } from 'lucide-react';
+import { Gift, Search, RefreshCw, Users, Calendar, Plus, ChevronRight } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -19,6 +19,9 @@ import { TableSkeleton } from '@/components/ui/loading-state';
 import ReferralCodeDetailModal from '@/components/modals/ReferralCodeDetailModal';
 import CreateReferralCodeModal from '@/components/modals/CreateReferralCodeModal';
 import type { AdminReferralCode, AdminReferralCodesParams } from '@/types/admin';
+import { formatCAD } from '@/lib/utils';
+import { resolveReferralPayout } from '@/lib/utils/referral-payout';
+import { useLivePeerReferralBonus } from '@/hooks/useReferralBonus';
 
 interface ReferralCodesTableProps {
   title: string;
@@ -27,6 +30,32 @@ interface ReferralCodesTableProps {
   onSearch?: (params: Partial<AdminReferralCodesParams>) => void;
   onRefresh?: () => void;
   onCreateSuccess?: () => void;
+}
+
+/**
+ * A peer referral pays the live bonus setting to BOTH sides at payout time and
+ * ignores the amount frozen on the code, so the stored figure is not what anyone
+ * receives (ADMIN_SETTINGS.md 4.1). Admin codes do pay their frozen amount.
+ */
+function PayoutCell({
+  code,
+  livePeerBonus,
+}: {
+  code: { amount: number; referral_type?: 'instructor' | 'admin' };
+  livePeerBonus: number | null;
+}) {
+  const payout = resolveReferralPayout(code, livePeerBonus);
+
+  return (
+    <div>
+      <span className="font-medium text-green-600">{formatCAD(payout.perSide, { suffix: false })}</span>
+      <p className="text-[11px] text-gray-500">
+        {payout.sides === 2
+          ? `each side · ${formatCAD(payout.total, { suffix: false })} in all`
+          : 'fixed on this code'}
+      </p>
+    </div>
+  );
 }
 
 export default function ReferralCodesTable({
@@ -73,9 +102,7 @@ export default function ReferralCodesTable({
     return <Badge className={config.color}>{config.text}</Badge>;
   };
 
-  const formatPrice = (amount: number) => {
-    return `$${(amount / 100).toFixed(2)}`;
-  };
+  const livePeerBonus = useLivePeerReferralBonus();
 
   return (
     <>
@@ -158,7 +185,7 @@ export default function ReferralCodesTable({
                 <TableRow>
                   <TableHead>Code</TableHead>
                   <TableHead>Owner</TableHead>
-                  <TableHead>Amount</TableHead>
+                  <TableHead>Payout</TableHead>
                   <TableHead>Min Rides</TableHead>
                   <TableHead>Rides Completed</TableHead>
                   <TableHead>Status</TableHead>
@@ -198,10 +225,7 @@ export default function ReferralCodesTable({
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <DollarSign className="w-3 h-3 text-green-500" />
-                        <span className="font-medium text-green-600">{formatPrice(code.amount)}</span>
-                      </div>
+                      <PayoutCell code={code} livePeerBonus={livePeerBonus} />
                     </TableCell>
                     <TableCell>
                       <span className="text-sm">{code.min_rides_required}</span>

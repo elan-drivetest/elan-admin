@@ -10,6 +10,9 @@ import { Gift, Users, DollarSign, CheckCircle } from 'lucide-react';
 import { useReferralCodes } from '@/hooks/useAdmin';
 import CursorPagination from '@/components/ui/CursorPagination';
 import type { AdminReferralCodesParams } from '@/types/admin';
+import { formatCAD } from '@/lib/utils';
+import { resolveReferralPayout } from '@/lib/utils/referral-payout';
+import { useLivePeerReferralBonus } from '@/hooks/useReferralBonus';
 
 export default function ReferralCodesPage() {
   const [searchParams, setSearchParams] = useState<AdminReferralCodesParams>({
@@ -19,20 +22,25 @@ export default function ReferralCodesPage() {
   });
 
   const { data: referralCodes, meta, isLoading, error, refetch } = useReferralCodes(searchParams);
+  // Peer codes pay the live setting, not their stored amount (ADMIN_SETTINGS.md 4.1)
+  const livePeerBonus = useLivePeerReferralBonus();
 
   const metrics = React.useMemo(() => {
     const totalCodes = meta?.total ?? referralCodes.length;
     const activeCodes = referralCodes.filter(c => c.status === 'active').length;
     const claimedCodes = referralCodes.filter(c => c.status === 'claimed').length;
-    const totalAmount = referralCodes.reduce((sum, c) => sum + c.amount, 0);
+    const totalAmount = referralCodes.reduce(
+      (sum, c) => sum + resolveReferralPayout(c, livePeerBonus).total,
+      0,
+    );
 
     return [
       { title: meta?.total ? 'Total Codes' : 'Codes (page)', value: totalCodes.toString(), icon: Gift },
       { title: 'Active (page)', value: activeCodes.toString(), icon: Users },
       { title: 'Claimed (page)', value: claimedCodes.toString(), icon: CheckCircle },
-      { title: 'Value (page)', value: `$${(totalAmount / 100).toLocaleString()}`, icon: DollarSign }
+      { title: 'Payout value (page)', value: formatCAD(totalAmount, { suffix: false }), icon: DollarSign }
     ];
-  }, [referralCodes, meta]);
+  }, [referralCodes, meta, livePeerBonus]);
 
   const handleSearchUpdate = (newParams: Partial<AdminReferralCodesParams>) => {
     const updatedParams = { ...searchParams, ...newParams, cursor: undefined, direction: undefined };
