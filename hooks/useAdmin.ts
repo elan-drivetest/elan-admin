@@ -782,6 +782,41 @@ export function useAddons() {
   return { data, isLoading, error, refetch: fetchAddons };
 }
 
+/**
+ * The add-on catalogue as the settings screen sees it
+ * (`GET /admin/settings/addons`). Same rows as `useAddons`, different route —
+ * this one is the admin-namespaced read that pairs with the PUT.
+ */
+export function useSettingsAddons() {
+  const [data, setData] = useState<AddonsResponse>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const fetchSettingsAddons = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await adminService.getSettingsAddons();
+      setData(Array.isArray(response) ? response : []);
+    } catch (err: unknown) {
+      console.error('Settings addons fetch error:', err);
+      setError({
+        message: getApiErrorMessages(err)[0],
+        code: 'FETCH_SETTINGS_ADDONS_ERROR',
+      });
+      setData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSettingsAddons();
+  }, [fetchSettingsAddons]);
+
+  return { data, isLoading, error, refetch: fetchSettingsAddons };
+}
+
 export function useActiveCoupons() {
   const [data, setData] = useState<AdminCouponsResponse>([]);
   const [isLoading, setIsLoading] = useState(true);

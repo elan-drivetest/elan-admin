@@ -38,7 +38,9 @@ import type {
   AddressSearchResponse,
   CouponVerificationResponse,
   CouponVerificationRequest,
+  Addon,
   AddonsResponse,
+  UpdateAddonRequest,
   DistanceCalculationRequest,
   DistanceCalculationResponse,
   SystemSettingsResponse,
@@ -241,6 +243,19 @@ export const adminService = {
   async getAddons(): Promise<AddonsResponse> {
     const response = await apiClient.get('/addons');
     return Array.isArray(response.data) ? response.data : [];
+  },
+
+  // Add-on catalogue, namespaced under settings so one admin screen covers both
+  async getSettingsAddons(): Promise<AddonsResponse> {
+    const response = await apiClient.get('/admin/settings/addons');
+    return Array.isArray(response.data) ? response.data : [];
+  },
+
+  async updateSettingsAddon(id: number, data: UpdateAddonRequest): Promise<Addon> {
+    // `price` goes as an integer here — the string rule applies to settings.value,
+    // not to addons (ADMIN_SETTINGS.md section 1).
+    const response = await apiClient.put(`/admin/settings/addons/${id}`, data);
+    return response.data;
   },
 
   // Admin distance calculation endpoint

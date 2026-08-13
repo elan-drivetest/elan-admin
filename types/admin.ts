@@ -511,12 +511,22 @@ export type AdminReferralCodesResponse = AdminReferralCode[];
 export type AdminReferralCodeDetailResponse = AdminReferralCode;
 
 // Coupon types
+/**
+ * How a coupon's `discount` is applied. 'fixed' = cents off, 'percentage' =
+ * whole percent off (1-100). Backend enum `CouponDiscountType`; omitted rows
+ * behave as 'fixed'. Note a `is_failure_coupon` coupon is ALWAYS treated as a
+ * percentage by the pricing engine regardless of this field.
+ */
+export type CouponDiscountType = 'percentage' | 'fixed';
+
 export interface AdminCoupon {
   id: number;
   name: string;
   description: string;
   code: string;
-  discount: number; // Amount in cents
+  /** CENTS when discount_type is 'fixed'; WHOLE PERCENT when 'percentage' or is_failure_coupon. */
+  discount: number;
+  discount_type?: CouponDiscountType;
   is_recurrent: boolean;
   is_failure_coupon: boolean;
   min_purchase_amount: number; // Amount in cents
@@ -584,7 +594,10 @@ export interface CreateCouponRequest {
   name: string;
   description: string;
   code: string;
+  /** CENTS for discount_type 'fixed'; whole percent (1-100) for 'percentage'. */
   discount: number;
+  /** Optional; the backend defaults to 'fixed'. */
+  discount_type?: CouponDiscountType;
   is_recurrent: boolean;
   is_failure_coupon: boolean;
   min_purchase_amount: number;
@@ -597,6 +610,7 @@ export interface UpdateCouponRequest {
   description?: string;
   code?: string;
   discount?: number;
+  discount_type?: CouponDiscountType;
   is_recurrent?: boolean;
   is_failure_coupon?: boolean;
   min_purchase_amount?: number;
@@ -673,7 +687,9 @@ export interface CouponVerificationResponse {
   name: string;
   description: string;
   code: string;
-  discount: number; // Amount in cents
+  /** CENTS when discount_type is 'fixed'; WHOLE PERCENT when 'percentage' or is_failure_coupon. */
+  discount: number;
+  discount_type?: CouponDiscountType;
   is_recurrent: boolean;
   is_failure_coupon: boolean;
   min_purchase_amount: number; // Amount in cents
@@ -696,6 +712,20 @@ export interface Addon {
 }
 
 export type AddonsResponse = Addon[];
+
+/**
+ * `PUT /v1/admin/settings/addons/:id`.
+ *
+ * Unlike `settings.value`, `price` is a real INTEGER in cents on the wire
+ * (`@IsInt() @Min(0)`) — send 6000, not "6000". `type` is not updatable, and
+ * there is no create or delete (ADMIN_SETTINGS.md section 1).
+ */
+export interface UpdateAddonRequest {
+  price?: number;
+  name?: string;
+  description?: string;
+  duration?: number;
+}
 
 // Customer dropdown type (reuse existing AdminCustomer but simplified)
 export interface CustomerOption {

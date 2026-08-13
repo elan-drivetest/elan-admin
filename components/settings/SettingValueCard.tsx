@@ -5,6 +5,14 @@ import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import FormErrorAlert from '@/components/ui/form-error-alert';
 import { AlertTriangle, ArrowRight, Check, Loader2, Pencil, X } from 'lucide-react';
 import { adminService } from '@/services/admin';
@@ -14,6 +22,8 @@ import {
   formatSettingValue,
   getSettingCopy,
   getSettingEditorSpec,
+  getSettingUnit,
+  isMoneyUnit,
   parseSettingInput,
   toEditorValue,
 } from '@/lib/settings-copy';
@@ -25,6 +35,8 @@ interface SettingValueCardProps {
   inPractice?: string | null;
   /** One line of consequence for the typed value, e.g. a re-priced example trip. */
   describeImpact?: (nextValue: number) => string | null;
+  /** Rules that need a sibling setting — returns an error message or null. */
+  validate?: (nextValue: number) => string | null;
   onUpdated: () => void;
 }
 
@@ -32,21 +44,29 @@ export default function SettingValueCard({
   setting,
   inPractice,
   describeImpact,
+  validate,
   onUpdated,
 }: SettingValueCardProps) {
   const copy = getSettingCopy(setting.key);
   const spec = getSettingEditorSpec(setting.key);
+  const unit = getSettingUnit(setting.key);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(() => toEditorValue(setting.key, setting.value));
+  const [isConfirming, setIsConfirming] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
   const parsed = parseSettingInput(setting.key, editValue);
   const isUnchanged = parsed.ok && parsed.storedValue === String(setting.value).trim();
+  const siblingError = parsed.ok && !isUnchanged ? validate?.(parsed.numericValue) ?? null : null;
   const impact = parsed.ok && !isUnchanged ? describeImpact?.(parsed.numericValue) : null;
+  const canSave = parsed.ok && !isUnchanged && !siblingError;
 
-  const handleSave = async () => {
+  /** §4.4: the high and medium keys are confirmed before they are written. */
+  const needsConfirmation = copy?.risk === 'high' || copy?.risk === 'medium';
+
+  const performSave = async () => {
     if (!parsed.ok) return;
 
     setIsSaving(true);
@@ -62,12 +82,23 @@ export default function SettingValueCard({
       // next quote uses the new number instead of the one just replaced.
       invalidatePricingConfig();
       onUpdated();
+      setIsConfirming(false);
       setIsEditing(false);
     } catch (err: unknown) {
       setErrors(getApiErrorMessages(err));
+      setIsConfirming(false);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSaveClick = () => {
+    if (!canSave) return;
+    if (needsConfirmation) {
+      setIsConfirming(true);
+      return;
+    }
+    performSave();
   };
 
   return (
@@ -116,10 +147,18 @@ export default function SettingValueCard({
                 aria-label={copy?.label ?? setting.key}
                 className="text-sm"
               />
-              {spec.suffix && <span className="text-sm text-gray-500">{spec.suffix}</span>}
+              {spec.suffix && <span className="whitespace-nowrap text-sm text-gray-500">{spec.suffix}</span>}
             </div>
 
-            {parsed.ok && !isUnchanged && (
+            {/* Typing 40 where 4000 belongs is a 100x error — show both readings */}
+            {parsed.ok && isMoneyUnit(unit) && (
+              <p className="text-xs text-gray-500">
+                = {formatSettingValue(setting.key, parsed.storedValue)} · saved as{' '}
+                {parsed.storedValue}
+              </p>
+            )}
+
+            {parsed.ok && !isUnchanged && !siblingError && (
               <div className="space-y-1 text-xs text-gray-600">
                 <div className="flex items-center gap-2">
                   <span className="text-gray-400 line-through">
@@ -137,14 +176,15 @@ export default function SettingValueCard({
             {!parsed.ok && editValue.trim() !== '' && (
               <p className="text-xs text-red-600">{parsed.error}</p>
             )}
+            {siblingError && <p className="text-xs text-red-600">{siblingError}</p>}
 
             <FormErrorAlert messages={errors} />
 
             <div className="flex gap-2">
               <Button
                 size="sm"
-                onClick={handleSave}
-                disabled={isSaving || !parsed.ok || isUnchanged}
+                onClick={handleSaveClick}
+                disabled={isSaving || !canSave}
                 className="flex-1"
               >
                 {isSaving ? (
@@ -180,6 +220,48 @@ export default function SettingValueCard({
           </div>
         )}
       </CardContent>
+
+      <Dialog open={isConfirming} onOpenChange={(open) => !isSaving && setIsConfirming(open)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm this change</DialogTitle>
+            <DialogDescription>
+              {copy?.label ?? setting.key} — this one carries real consequences.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 rounded-lg bg-gray-50 p-3 text-sm">
+              <span className="text-gray-500 line-through">
+                {formatSettingValue(setting.key, setting.value)}
+              </span>
+              <ArrowRight className="h-4 w-4 text-gray-400" />
+              <span className="font-semibold text-gray-900">
+                {parsed.ok ? formatSettingValue(setting.key, parsed.storedValue) : ''}
+              </span>
+            </div>
+
+            {copy?.warning && (
+              <p className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{copy.warning}</span>
+              </p>
+            )}
+
+            {impact && <p className="text-sm text-gray-600">{impact}</p>}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsConfirming(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button onClick={performSave} disabled={isSaving}>
+              {isSaving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              Save change
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
