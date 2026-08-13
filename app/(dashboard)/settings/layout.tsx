@@ -4,7 +4,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChevronRight, Home, Cog, Users, Gift, TableConfig, MapPin } from 'lucide-react';
+import { ChevronRight, Home, Cog, Users, Gift, TableConfig, MapPin, Coins } from 'lucide-react';
 import DashboardHeader from '@/components/layouts/DashboardHeader';
 
 interface SettingsLayoutProps {
@@ -75,6 +75,10 @@ const SettingsBreadcrumb = () => {
      if (segments.includes('test-centers')) {
        items.push({ label: 'Test Centers', href: '/settings/test-centers', icon: MapPin });
      }
+
+     if (segments.includes('pricing-and-payouts')) {
+       items.push({ label: 'Pricing & Payouts', href: '/settings/pricing-and-payouts', icon: Coins });
+     }
    }
 
    return items;
@@ -134,6 +138,13 @@ const SettingsBreadcrumb = () => {
      return {
        title: 'Coupon Usage Analytics',
        subtitle: 'Track coupon usage across all bookings.'
+     };
+   }
+
+   if (pathname === '/settings/pricing-and-payouts') {
+     return {
+       title: 'Pricing & Payouts',
+       subtitle: 'What customers pay for a pickup, what instructors earn, and what referral bonuses cost.'
      };
    }
 
@@ -244,6 +255,13 @@ const SettingsHeader = () => {
      return {
        title: 'Coupons',
        subtitle: 'Manage discount coupons and promotional codes.'
+     };
+   }
+
+   if (pathname === '/settings/pricing-and-payouts') {
+     return {
+       title: 'Pricing & Payouts',
+       subtitle: 'What customers pay for a pickup, what instructors earn, and what referral bonuses cost.'
      };
    }
 

@@ -5,140 +5,61 @@ import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import FormErrorAlert from '@/components/ui/form-error-alert';
-import {
-  AlertTriangle,
-  ArrowRight,
-  Check,
-  Clock3,
-  Loader2,
-  Pencil,
-  Settings2,
-  X,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { ArrowRight, Check, Loader2, Pencil, X } from 'lucide-react';
 import { adminService } from '@/services/admin';
 import { getApiErrorMessages } from '@/lib/utils';
 import { isPricingCriticalSetting } from '@/lib/pricing-config';
 import { invalidatePricingConfig } from '@/hooks/usePricingConfig';
 import {
-  describeSettingUnit,
   formatSettingValue,
   fromEditorValue,
+  getSettingCopy,
   getSettingEditorSpec,
+  getSettingUnit,
   toEditorValue,
-  type SettingCopy,
 } from '@/lib/settings-copy';
 import type { SystemSetting, UpdateSystemSettingRequest } from '@/types/admin';
 
-export type AccentTone = 'emerald' | 'blue' | 'violet' | 'slate';
-
-const ACCENTS: Record<AccentTone, { iconBg: string; iconText: string; border: string; bullet: string }> = {
-  emerald: {
-    iconBg: 'bg-emerald-50',
-    iconText: 'text-emerald-600',
-    border: 'hover:border-emerald-300',
-    bullet: 'text-emerald-600',
-  },
-  blue: {
-    iconBg: 'bg-blue-50',
-    iconText: 'text-blue-600',
-    border: 'hover:border-blue-300',
-    bullet: 'text-blue-600',
-  },
-  violet: {
-    iconBg: 'bg-violet-50',
-    iconText: 'text-violet-600',
-    border: 'hover:border-violet-300',
-    bullet: 'text-violet-600',
-  },
-  slate: {
-    iconBg: 'bg-gray-100',
-    iconText: 'text-gray-600',
-    border: 'hover:border-gray-300',
-    bullet: 'text-gray-500',
-  },
-};
-
-/**
- * A plain-English preview of what a typed value would do. Deliberately data,
- * not markup, so the page that knows the business rules doesn't have to return
- * JSX from a callback.
- */
-export interface SettingImpact {
-  /** The consequence, in one sentence. */
-  headline: string;
-  /** Optional qualifier — what stays unchanged, what to watch for. */
-  detail?: string;
-  tone?: 'neutral' | 'warning';
-}
-
 interface SettingValueCardProps {
   setting: SystemSetting;
-  /** Absent for a key the backend added that this screen has no wording for yet. */
-  copy?: SettingCopy;
-  icon?: LucideIcon;
-  accent?: AccentTone;
-  /** Given the value in the unit it is stored in (cents, km, …). */
-  describeImpact?: (nextValue: number) => SettingImpact | null;
-  onUpdated: (updated: SystemSetting) => void;
+  /** One line of consequence for the typed value, e.g. a re-priced example trip. */
+  describeImpact?: (nextValue: number) => string | null;
+  onUpdated: () => void;
 }
 
 export default function SettingValueCard({
   setting,
-  copy,
-  icon,
-  accent = 'slate',
   describeImpact,
   onUpdated,
 }: SettingValueCardProps) {
+  const copy = getSettingCopy(setting.key);
+  const unit = getSettingUnit(setting.key);
+  const spec = getSettingEditorSpec(unit);
+
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(() => toEditorValue(copy?.unit, setting.value));
+  const [editValue, setEditValue] = useState(() => toEditorValue(unit, setting.value));
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
-  const tone = ACCENTS[accent];
-  const Icon = icon ?? Settings2;
-  const spec = getSettingEditorSpec(copy?.unit);
-  const parsedEdit = fromEditorValue(copy?.unit, editValue);
-  const isPricingCritical = isPricingCriticalSetting(setting.key);
-  const isUnchanged = parsedEdit.ok && parsedEdit.storedValue === String(setting.value).trim();
-  const impact = parsedEdit.ok && !isUnchanged ? describeImpact?.(parsedEdit.numericValue) : null;
-
-  const startEditing = () => {
-    setEditValue(toEditorValue(copy?.unit, setting.value));
-    setErrors([]);
-    setIsEditing(true);
-  };
-
-  const cancelEditing = () => {
-    setEditValue(toEditorValue(copy?.unit, setting.value));
-    setErrors([]);
-    setIsEditing(false);
-  };
+  const parsed = fromEditorValue(unit, editValue);
+  const isUnchanged = parsed.ok && parsed.storedValue === String(setting.value).trim();
+  const impact = parsed.ok && !isUnchanged ? describeImpact?.(parsed.numericValue) : null;
 
   const handleSave = async () => {
-    if (!setting.key) {
-      setErrors(['This setting has no key and cannot be saved.']);
-      return;
-    }
-    if (!parsedEdit.ok) {
-      setErrors([parsedEdit.error]);
-      return;
-    }
+    if (!parsed.ok) return;
 
     setIsSaving(true);
     setErrors([]);
 
     try {
-      const payload: UpdateSystemSettingRequest = { value: parsedEdit.storedValue };
-      const updated = await adminService.updateSystemSettingByKey(setting.key, payload);
+      const payload: UpdateSystemSettingRequest = { value: parsed.storedValue };
+      await adminService.updateSystemSettingByKey(setting.key, payload);
 
       // The booking price preview caches these values — drop the cache so the
       // next quote uses the new number instead of the one just replaced.
       invalidatePricingConfig();
-      onUpdated(updated);
+      onUpdated();
       setIsEditing(false);
     } catch (err: unknown) {
       setErrors(getApiErrorMessages(err));
@@ -148,173 +69,104 @@ export default function SettingValueCard({
   };
 
   return (
-    <Card className={`h-full border-gray-200 transition-colors ${tone.border}`}>
-      <CardContent className="flex h-full flex-col gap-4 p-5">
-        {/* Name + what it is */}
-        <div className="flex items-start gap-3">
-          <div className={`shrink-0 rounded-lg p-2 ${tone.iconBg}`}>
-            <Icon className={`h-5 w-5 ${tone.iconText}`} />
-          </div>
-          <div className="min-w-0">
-            <h3 className="font-semibold leading-snug text-gray-900">
-              {copy?.label ?? setting.name ?? setting.key}
-            </h3>
-            <p className="mt-1 text-sm leading-relaxed text-gray-600">
-              {copy?.meaning ?? setting.description ?? 'No description available for this setting.'}
-            </p>
-          </div>
+    <Card className="h-full border-gray-200">
+      <CardContent className="flex h-full flex-col gap-3 p-5">
+        <div>
+          <h3 className="font-medium text-gray-900">{copy?.label ?? setting.name ?? setting.key}</h3>
+          <p className="mt-1 text-sm leading-relaxed text-gray-600">
+            {copy?.meaning ?? setting.description}
+          </p>
         </div>
 
-        {/* The number itself */}
-        <div className="rounded-xl border border-gray-100 bg-gray-50/70 px-4 py-3">
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-2xl font-semibold tracking-tight text-gray-900">
-              {formatSettingValue(setting.key, setting.value)}
-            </span>
-            <span className="text-xs text-gray-500">{describeSettingUnit(copy?.unit)}</span>
-          </div>
-        </div>
+        <p className="text-2xl font-semibold tracking-tight text-gray-900">
+          {formatSettingValue(setting.key, setting.value)}
+        </p>
 
-        {/* What changing it does */}
-        {copy?.affects?.length ? (
-          <ul className="space-y-2">
-            {copy.affects.map((line) => (
-              <li key={line} className="flex gap-2 text-sm leading-relaxed text-gray-700">
-                <Check className={`mt-0.5 h-4 w-4 shrink-0 ${tone.bullet}`} />
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        {isEditing ? (
+          <div className="mt-auto space-y-3">
+            {/* base_distance / base_rate / normal_rate take effect on the very
+                next booking with no deploy, and the customer app still hardcodes
+                them — so an edit here is a coordinated release. */}
+            {isPricingCriticalSetting(setting.key) && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs leading-relaxed text-amber-900">
+                Changes what customers are charged on the next booking. The customer app has its own
+                copy of this number — release both together.
+              </p>
+            )}
 
-        {copy?.caution && (
-          <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-            <p className="text-xs leading-relaxed text-amber-900">{copy.caution}</p>
-          </div>
-        )}
-
-        <div className="mt-auto space-y-3">
-          {copy?.takesEffect && (
-            <p className="flex items-start gap-2 text-xs text-gray-500">
-              <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                <span className="font-medium text-gray-700">When a change kicks in: </span>
-                {copy.takesEffect}
-              </span>
-            </p>
-          )}
-
-          {isEditing ? (
-            <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-3">
-              {/* base_distance / base_rate / normal_rate take effect on the very
-                  next booking with no deploy, and the customer client still
-                  hardcodes them — so an edit here is a coordinated release. */}
-              {isPricingCritical && (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-2.5">
-                  <p className="text-xs leading-relaxed text-amber-900">
-                    <strong>This changes what customers are charged.</strong> It applies to the
-                    next booking taken, with nothing to deploy or approve. The customer app still
-                    carries its own copy of this number for the price it previews — line this
-                    change up with a customer-app release, or people will be quoted one price and
-                    charged another.
-                  </p>
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <Label htmlFor={`setting-${setting.key}`} className="text-xs text-gray-600">
-                  {spec.label}
-                </Label>
-                <div className="flex items-center gap-2">
-                  {spec.mode === 'dollars' && <span className="text-sm text-gray-500">$</span>}
-                  <Input
-                    id={`setting-${setting.key}`}
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    placeholder={spec.placeholder}
-                    inputMode="decimal"
-                    className="text-sm"
-                  />
-                  {spec.suffix && <span className="text-sm text-gray-500">{spec.suffix}</span>}
-                </div>
-              </div>
-
-              {/* Before → after, so the consequence is visible before saving. */}
-              {parsedEdit.ok && !isUnchanged && (
-                <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="text-gray-500 line-through">
-                      {formatSettingValue(setting.key, setting.value)}
-                    </span>
-                    <ArrowRight className="h-3.5 w-3.5 text-gray-400" />
-                    <span className="font-semibold text-gray-900">
-                      {formatSettingValue(setting.key, parsedEdit.storedValue)}
-                    </span>
-                  </div>
-                  {impact && (
-                    <p
-                      className={`text-xs leading-relaxed ${
-                        impact.tone === 'warning' ? 'text-red-600' : 'text-gray-600'
-                      }`}
-                    >
-                      <span className="font-medium text-gray-900">{impact.headline}</span>
-                      {impact.detail ? ` ${impact.detail}` : ''}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {!parsedEdit.ok && editValue.trim() !== '' && (
-                <p className="text-xs text-red-600">{parsedEdit.error}</p>
-              )}
-
-              <FormErrorAlert messages={errors} />
-
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={isSaving || !parsedEdit.ok || isUnchanged}
-                  className="flex-1"
-                >
-                  {isSaving ? (
-                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Check className="mr-1 h-3.5 w-3.5" />
-                  )}
-                  Save change
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={cancelEditing}
-                  disabled={isSaving}
-                  className="flex-1"
-                >
-                  <X className="mr-1 h-3.5 w-3.5" />
-                  Cancel
-                </Button>
-              </div>
+            <div className="flex items-center gap-2">
+              {spec.mode === 'dollars' && <span className="text-sm text-gray-500">$</span>}
+              <Input
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                placeholder={spec.placeholder}
+                inputMode="decimal"
+                aria-label={copy?.label ?? setting.key}
+                className="text-sm"
+              />
+              {spec.suffix && <span className="text-sm text-gray-500">{spec.suffix}</span>}
             </div>
-          ) : (
-            <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-              <span className="truncate text-[11px] text-gray-400" title={setting.key}>
-                {setting.updated_at
-                  ? `Last changed ${new Date(setting.updated_at).toLocaleDateString('en-CA', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}`
-                  : 'Never changed'}
-              </span>
-              <Button variant="outline" size="sm" onClick={startEditing}>
-                <Pencil className="mr-1 h-3.5 w-3.5" />
-                Change
+
+            {parsed.ok && !isUnchanged && (
+              <div className="space-y-1 text-xs text-gray-600">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400 line-through">
+                    {formatSettingValue(setting.key, setting.value)}
+                  </span>
+                  <ArrowRight className="h-3 w-3 text-gray-400" />
+                  <span className="font-medium text-gray-900">
+                    {formatSettingValue(setting.key, parsed.storedValue)}
+                  </span>
+                </div>
+                {impact && <p>{impact}</p>}
+              </div>
+            )}
+
+            {!parsed.ok && editValue.trim() !== '' && (
+              <p className="text-xs text-red-600">{parsed.error}</p>
+            )}
+
+            <FormErrorAlert messages={errors} />
+
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={isSaving || !parsed.ok || isUnchanged}
+                className="flex-1"
+              >
+                {isSaving ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Check className="mr-1 h-3.5 w-3.5" />
+                )}
+                Save
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditValue(toEditorValue(unit, setting.value));
+                  setErrors([]);
+                  setIsEditing(false);
+                }}
+                disabled={isSaving}
+                className="flex-1"
+              >
+                <X className="mr-1 h-3.5 w-3.5" />
+                Cancel
               </Button>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="mt-auto flex items-center justify-between gap-3 pt-1">
+            <span className="text-xs text-gray-400">{setting.key}</span>
+            <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+              <Pencil className="mr-1 h-3.5 w-3.5" />
+              Change
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
