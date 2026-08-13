@@ -18,12 +18,9 @@ import {
   Database,
   TrendingUp,
   MapPin,
-  Building2
+  Building2,
+  Coins
 } from 'lucide-react';
-import SystemSettingsSection from '@/components/sections/SystemSettingsSection';
-import { useSystemSettings } from '@/hooks/useAdmin';
-import LoadingState from '@/components/ui/loading-state';
-import type { SystemSetting } from '@/types/admin';
 
 interface SettingsItem {
   title: string;
@@ -46,6 +43,15 @@ interface QuickAction {
 }
 
 const userManagementItems: SettingsItem[] = [
+  {
+    title: 'Pricing & Payouts',
+    description: 'What customers pay, what instructors earn, and what referrals cost — explained',
+    icon: Coins,
+    href: '/settings/pricing-and-payouts',
+    action: 'Review Pricing',
+    iconBg: 'bg-emerald-50',
+    iconColor: 'text-emerald-600',
+  },
   {
     title: 'Admin Users',
     description: 'Manage administrator accounts and permissions',
@@ -85,6 +91,13 @@ const userManagementItems: SettingsItem[] = [
 ];
 
 const quickActions: QuickAction[] = [
+  {
+    title: 'Pricing & Payouts',
+    description: 'See and change the core money settings',
+    icon: Coins,
+    href: '/settings/pricing-and-payouts',
+    color: 'bg-primary/5 hover:bg-primary/10 text-primary border border-primary/25',
+  },
   {
     title: 'Create New Admin',
     description: 'Add a new administrator to the system',
@@ -156,12 +169,6 @@ const SettingsCard = ({ items, title }: { items: SettingsItem[], title: string }
 );
 
 export default function SettingsPage() {
-  const { data: systemSettings, isLoading: settingsLoading, error: settingsError, refetch } = useSystemSettings();
-
-  const handleSettingUpdate = (updatedSetting: SystemSetting) => {
-    refetch(); // Refresh all settings after update
-  };
-
   return (
     <div className="flex gap-8 px-6">
       {/* Main Content */}
@@ -192,30 +199,8 @@ export default function SettingsPage() {
           <SettingsCard items={userManagementItems} title="All Available Configurations" />
         </div>
 
-        {/* System Settings Section - Added Here */}
-        {settingsLoading ? (
-          <LoadingState card text="Loading system settings..." />
-        ) : settingsError ? (
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center py-8 text-red-600">
-                <p className="font-medium">Error loading system settings</p>
-                <p className="text-sm mt-1">{settingsError.message}</p>
-                <button 
-                  onClick={() => refetch()} 
-                  className="mt-3 text-sm underline hover:no-underline"
-                >
-                  Try again
-                </button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <SystemSettingsSection 
-            settings={systemSettings || []} 
-            onSettingUpdate={handleSettingUpdate}
-          />
-        )}
+        {/* The pricing/payout values that used to sit here inline now live on their
+            own screen, where each one is explained rather than shown as a raw row. */}
 
         {/* System Information - Redesigned */}
         <Card className="border-gray-200">
@@ -257,13 +242,14 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              <div className="p-4 rounded-lg bg-gray-50 border border-gray-100">
+              <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
                 <div className="flex items-center gap-3 mb-2">
-                  <Settings className="w-5 h-5 text-gray-600" />
-                  <h3 className="font-mono font-semibold text-gray-900">System Settings</h3>
+                  <Coins className="w-5 h-5 text-emerald-600" />
+                  <h3 className="font-mono font-semibold text-emerald-900">Pricing &amp; Payouts</h3>
                 </div>
-                <p className="text-sm text-gray-700">
-                  Configure application settings, user roles, and system preferences.
+                <p className="text-sm text-emerald-700">
+                  Set what customers pay for a pickup, what instructors earn per hour, and what
+                  referral bonuses cost — each one explained with a worked example.
                 </p>
               </div>
             </div>
