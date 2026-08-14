@@ -18,7 +18,7 @@ import {
 import { TableSkeleton } from '@/components/ui/loading-state';
 import InstructorDetailModal from '@/components/modals/InstructorDetailModal';
 import type { AdminInstructor, AdminInstructorsParams } from '@/types/admin';
-import { cn } from '@/lib/utils';
+import { cn, formatCAD } from '@/lib/utils';
 
 interface InstructorsTableProps {
   title: string;
@@ -69,10 +69,8 @@ export default function InstructorsTable({
     }
   };
 
-  const formatPrice = (price: number | string) => {
-    const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
-    return `$${(numericPrice / 100).toFixed(2)}`;
-  };
+  // formatCAD already tolerates the string amounts these columns come back as.
+  const formatPrice = (price: number | string) => formatCAD(price, { suffix: false });
 
   const handleViewDetails = (instructorId: number) => {
     setSelectedInstructorId(instructorId.toString());

@@ -17,7 +17,8 @@ import {
 import { TableSkeleton } from '@/components/ui/loading-state';
 import BookingDetailModal from '@/components/modals/BookingDetailModal';
 import FilePreviewerModal from '@/components/modals/FilePreviewerModal';
-import { formatBookingStatus } from '@/lib/utils';
+import { formatBookingStatus, formatCAD } from '@/lib/utils';
+import { deriveBookingAdjustment } from '@/lib/utils/booking-calculations';
 import type { AdminBooking } from '@/types/admin';
 
 export interface EnhancedBookingData {
@@ -85,9 +86,7 @@ export default function EnhancedBookingsTable({
     );
   };
 
-  const formatPrice = (price: number) => {
-    return `$${(price / 100).toFixed(2)} CAD`;
-  };
+  const formatPrice = (price: number) => formatCAD(price);
 
 
   const formatPickupLocation = (booking: EnhancedBookingData) => {
@@ -211,26 +210,39 @@ export default function EnhancedBookingsTable({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">
-                          <div className="font-medium text-green-600">
-                            {formatPrice(booking.totalPrice)}
-                          </div>
-                          <div className="text-xs text-gray-500 space-y-1">
-                            <div>Base: {formatPrice(booking.basePrice)}</div>
-                            {booking.pickupPrice > 0 && (
-                              <div>Pickup: {formatPrice(booking.pickupPrice)}</div>
-                            )}
-                            {booking.addonsPrice > 0 && (
-                              <div>Addons: {formatPrice(booking.addonsPrice)}</div>
-                            )}
-                            {booking.discountAmount && booking.discountAmount > 0 && (
-                              <div className="text-red-600">
-                                Discount: -{formatPrice(booking.discountAmount)}
-                                {booking.couponCode && ` (${booking.couponCode})`}
+                        {/* base + pickup + addons does NOT equal total_price once a
+                            long-trip credit or coupon applied, and the booking's own
+                            discount_amount is always null — so derive the gap. */}
+                        {(() => {
+                          const { adjustment } = deriveBookingAdjustment({
+                            base_price: booking.basePrice,
+                            pickup_price: booking.pickupPrice,
+                            addons_price: booking.addonsPrice,
+                            total_price: booking.totalPrice,
+                          });
+                          return (
+                            <div className="text-sm">
+                              <div className="font-medium text-green-600">
+                                {formatPrice(booking.totalPrice)}
                               </div>
-                            )}
-                          </div>
-                        </div>
+                              <div className="text-xs text-gray-500 space-y-1">
+                                <div>Base: {formatPrice(booking.basePrice)}</div>
+                                {booking.pickupPrice > 0 && (
+                                  <div>Pickup: {formatPrice(booking.pickupPrice)}</div>
+                                )}
+                                {booking.addonsPrice > 0 && (
+                                  <div>Addons: {formatPrice(booking.addonsPrice)}</div>
+                                )}
+                                {adjustment > 0 && (
+                                  <div className="text-red-600">
+                                    Adjustments: -{formatPrice(adjustment)}
+                                    {booking.couponCode && ` (${booking.couponCode})`}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         {booking.hasInstructor && booking.instructorName ? (

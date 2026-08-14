@@ -26,7 +26,7 @@ import { useRideSessionDetail } from '@/hooks/useAdmin';
 import { adminService } from '@/services/admin';
 import { TableSkeleton } from '@/components/ui/loading-state';
 import { toast } from 'sonner';
-import { getApiErrorMessages } from '@/lib/utils';
+import { getApiErrorMessages, formatCAD } from '@/lib/utils';
 import FilePreviewerModal from './FilePreviewerModal';
 interface RideSessionDetailModalProps {
   isOpen: boolean;
@@ -74,9 +74,7 @@ export default function RideSessionDetailModal({
     }
   };
 
-  const formatPrice = (price: number) => {
-    return `$${(price / 100).toFixed(2)} CAD`;
-  };
+  const formatPrice = (price: number) => formatCAD(price);
 
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -344,8 +342,14 @@ export default function RideSessionDetailModal({
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-gray-500">Platform Fee</p>
-                      <p className="text-2xl font-bold text-primary">{formatPrice(session.totalPrice - session.instructorPayments)}</p>
+                      {/* Customer charge minus instructor payout. This is a gross
+                          margin, not a platform fee — it ignores Stripe fees,
+                          refunds and any long-trip credit already applied. */}
+                      <p className="text-xs text-gray-500">Gross margin</p>
+                      <p className="text-2xl font-bold text-primary">
+                        {formatPrice(session.totalPrice - session.instructorPayments)}
+                      </p>
+                      <p className="text-[11px] text-gray-400">before fees &amp; refunds</p>
                     </div>
                   </div>
                 </CardContent>

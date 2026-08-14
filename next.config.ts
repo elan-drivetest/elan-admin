@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // `next build` and `next dev` both write to `.next` and corrupt each other's
+  // manifests when run together — which is normal here, because the dev server
+  // is usually open. Set NEXT_BUILD_DIR to build into a separate directory
+  // without disturbing a running dev server.
+  distDir: process.env.NEXT_BUILD_DIR || '.next',
   images: {
     remotePatterns: [
       {

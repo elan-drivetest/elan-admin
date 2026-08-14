@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Gift, Users, DollarSign, Calendar, ArrowLeft, Loader2 } from 'lucide-react';
 import { useCouponUsageById, useCouponDetail } from '@/hooks/useAdmin';
 import type { AdminCouponUsageParams } from '@/types/admin';
+import { formatCAD, isPercentageCoupon } from '@/lib/utils';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -28,8 +29,10 @@ export default function CouponUsageDetailPage({ params }: PageProps) {
   const { data: usageData, isLoading, error, refetch } = useCouponUsageById(resolvedParams.id, searchParams);
 
   // The usage record's discount_amount is unreliable; use the coupon's real discount.
+  // Only a FIXED coupon's face value can stand in for the usage amount; a
+  // percentage coupon's `discount` is a percent, not cents.
   const couponDiscounts = React.useMemo(
-    () => (coupon ? { [coupon.code]: coupon.discount } : {}),
+    () => (coupon && !isPercentageCoupon(coupon) ? { [coupon.code]: coupon.discount } : {}),
     [coupon]
   );
 
@@ -44,8 +47,8 @@ export default function CouponUsageDetailPage({ params }: PageProps) {
     return [
       { title: 'Total Usage', value: totalUsages.toString(), icon: Gift },
       { title: 'Unique Customers', value: uniqueCustomers.toString(), icon: Users },
-      { title: 'Total Discount Given', value: `$${(totalDiscount / 100).toLocaleString()} CAD`, icon: DollarSign },
-      { title: 'Avg Booking Value', value: `$${(avgBookingValue / 100).toFixed(0)} CAD`, icon: Calendar }
+      { title: 'Total Discount Given', value: formatCAD(totalDiscount), icon: DollarSign },
+      { title: 'Avg Booking Value', value: formatCAD(Math.round(avgBookingValue)), icon: Calendar }
     ];
   }, [usageData, couponDiscounts]);
 

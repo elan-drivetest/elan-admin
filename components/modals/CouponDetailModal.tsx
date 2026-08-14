@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Gift, Calendar, Users, Edit, Loader2, Activity, TrendingUp } from 'lucide-react';
 import { useCouponDetail } from '@/hooks/useAdmin';
-import { formatCAD } from '@/lib/utils';
+import { formatCAD, formatCouponDiscount, isPercentageCoupon } from '@/lib/utils';
 import EditCouponForm from '@/components/forms/EditCouponForm';
 
 interface CouponDetailModalProps {
@@ -87,7 +87,7 @@ export default function CouponDetailModal({ isOpen, onClose, couponId, onUpdate 
                 </div>
                 <div className="bg-white border rounded-lg p-3">
                   <p className="text-xs text-gray-500 mb-1">Discount</p>
-                  <p className="font-semibold text-green-600">{formatCAD(coupon.discount)}</p>
+                  <p className="font-semibold text-green-600">{formatCouponDiscount(coupon)}</p>
                 </div>
                 <div className="bg-white border rounded-lg p-3">
                   <p className="text-xs text-gray-500 mb-1">Min Purchase</p>
@@ -136,8 +136,16 @@ export default function CouponDetailModal({ isOpen, onClose, couponId, onUpdate 
                 <div className="bg-green-50 rounded-lg p-3 flex items-center gap-3">
                   <TrendingUp className="w-5 h-5 text-green-600" />
                   <div>
-                    <p className="text-xs text-green-700">Total discounts given</p>
-                    <p className="font-semibold text-green-800">{formatCAD(coupon.discount * coupon.usage_count)}</p>
+                    <p className="text-xs text-green-700">
+                      {isPercentageCoupon(coupon) ? 'Discount rate' : 'Total discounts given'}
+                    </p>
+                    {/* A percentage discount varies per booking, so only fixed
+                        coupons have a face value that can be multiplied out. */}
+                    <p className="font-semibold text-green-800">
+                      {isPercentageCoupon(coupon)
+                        ? `${formatCouponDiscount(coupon)} off each of ${coupon.usage_count} order${coupon.usage_count === 1 ? '' : 's'}`
+                        : formatCAD(coupon.discount * coupon.usage_count)}
+                    </p>
                   </div>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between text-xs text-gray-500">

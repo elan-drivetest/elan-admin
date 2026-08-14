@@ -24,3 +24,51 @@ export function useLivePeerReferralBonus(): number | null {
     return raw === undefined ? null : parseSettingValue(raw);
   }, [settings]);
 }
+
+/** Mirrors the backend's own defaults for a promo code (ADMIN_SETTINGS.md §3). */
+export const REFERRAL_CODE_FALLBACKS = {
+  amountCents: 10000,
+  minRides: 5,
+} as const;
+
+export interface ReferralCodeDefaults {
+  /** `admin_referral_price` — what a newly created promo code pays, in cents. */
+  amountCents: number;
+  /** `referral_min_rides` — rides required before the bonus is released. */
+  minRides: number;
+  /** True while the first `GET /admin/settings` is still in flight. */
+  isLoading: boolean;
+  /** True when either value came from the fallback rather than the server. */
+  usedFallback: boolean;
+}
+
+/**
+ * The values the create-promo-code form should start on.
+ *
+ * `admin_referral_price` and `referral_min_rides` are the *defaults the server
+ * applies to a new code* — the admin can still override either per code, but the
+ * form should open on what the business configured, not on a literal that drifts
+ * the moment someone edits Settings.
+ */
+export function useReferralCodeDefaults(): ReferralCodeDefaults {
+  const { settings, isLoading } = usePricingConfig();
+
+  return useMemo(() => {
+    const read = (key: string): number | null => {
+      const raw = settings.find((setting) => setting.key === key)?.value;
+      if (raw === undefined) return null;
+      const parsed = parseSettingValue(raw);
+      return parsed === null || parsed <= 0 ? null : parsed;
+    };
+
+    const amount = read('admin_referral_price');
+    const rides = read('referral_min_rides');
+
+    return {
+      amountCents: amount ?? REFERRAL_CODE_FALLBACKS.amountCents,
+      minRides: rides ?? REFERRAL_CODE_FALLBACKS.minRides,
+      isLoading,
+      usedFallback: amount === null || rides === null,
+    };
+  }, [settings, isLoading]);
+}

@@ -10,7 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import FormErrorAlert from '@/components/ui/form-error-alert';
-import { Loader2, Save, X, DollarSign, Calendar } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Loader2, Save, X, DollarSign, Percent, Calendar } from 'lucide-react';
 import { adminService } from '@/services/admin';
 import { getApiErrorMessages } from '@/lib/utils';
 import type { AdminCoupon } from '@/types/admin';
@@ -26,7 +33,9 @@ const editCouponSchema = z.object({
   name: z.string().min(1, 'Coupon name is required').min(2, 'Name must be at least 2 characters'),
   description: z.string().min(1, 'Description is required'),
   code: z.string().min(1, 'Coupon code is required').min(3, 'Code must be at least 3 characters').toUpperCase(),
-  discount: z.number().min(1, 'Discount amount is required').min(100, 'Minimum discount is $1.00'),
+  // Units depend on discount_type: CENTS for 'fixed', WHOLE PERCENT for 'percentage'.
+  discount: z.number().min(1, 'Discount amount is required'),
+  discount_type: z.enum(['fixed', 'percentage']),
   is_recurrent: z.boolean(),
   is_failure_coupon: z.boolean(),
   min_purchase_amount: z.number().min(0, 'Minimum purchase amount must be positive'),
@@ -39,7 +48,13 @@ const editCouponSchema = z.object({
 }, {
   message: "Expiration date must be after start date",
   path: ["expires_at"],
-});
+}).refine(
+  (data) => data.discount_type !== 'percentage' || data.discount <= 100,
+  { message: 'A percentage discount cannot exceed 100%', path: ['discount'] },
+).refine(
+  (data) => data.discount_type !== 'fixed' || data.discount >= 100,
+  { message: 'Minimum fixed discount is $1.00', path: ['discount'] },
+);
 
 type EditCouponFormData = z.infer<typeof editCouponSchema>;
 
@@ -66,6 +81,8 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
       description: coupon.description,
       code: coupon.code,
       discount: coupon.discount,
+      // Rows created before discount_type existed behave as 'fixed' server-side.
+      discount_type: coupon.discount_type ?? 'fixed',
       is_recurrent: coupon.is_recurrent,
       is_failure_coupon: coupon.is_failure_coupon,
       min_purchase_amount: coupon.min_purchase_amount,
@@ -77,6 +94,16 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
 
   const isRecurrent = watch('is_recurrent');
   const isFailureCoupon = watch('is_failure_coupon');
+  const discountType = watch('discount_type');
+  // The pricing engine treats every failed-test coupon as a percentage
+  // regardless of discount_type, so the input must match what will happen.
+  const isPercentage = discountType === 'percentage' || isFailureCoupon;
+
+  React.useEffect(() => {
+    if (isFailureCoupon && discountType !== 'percentage') {
+      setValue('discount_type', 'percentage', { shouldDirty: true });
+    }
+  }, [isFailureCoupon, discountType, setValue]);
 
   const onSubmit: SubmitHandler<EditCouponFormData> = async (data) => {
     try {
@@ -165,18 +192,67 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
       {/* Discount and Purchase Amount */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
+          <Label htmlFor="discount_type" className="text-sm font-medium text-gray-700">
+            Discount Type
+          </Label>
+          <Select
+            value={isPercentage ? 'percentage' : 'fixed'}
+            onValueChange={(value: 'fixed' | 'percentage') => {
+              setValue('discount_type', value, { shouldDirty: true });
+              // Switching units changes what the number means — reset rather than
+              // reinterpret an existing 1000 cents as 1000 percent.
+              setValue('discount', value === 'percentage' ? 10 : 1000, {
+                shouldDirty: true,
+              });
+            }}
+            disabled={isLoading || isFailureCoupon}
+          >
+            <SelectTrigger id="discount_type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fixed">Fixed amount off (CAD)</SelectItem>
+              <SelectItem value="percentage">Percentage off (%)</SelectItem>
+            </SelectContent>
+          </Select>
+          {isFailureCoupon && (
+            <p className="text-xs text-gray-500">
+              Failed-test coupons are always applied as a percentage.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="discount" className="text-sm font-medium text-gray-700">
-            Discount Amount (CAD)
+            {isPercentage ? 'Discount Percentage (%)' : 'Discount Amount (CAD)'}
           </Label>
           <div className="relative">
-            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            {isPercentage ? (
+              <Percent className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            ) : (
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            )}
             <Input
               id="discount"
               type="number"
-              step="0.01"
+              step={isPercentage ? '1' : '0.01'}
               min="1"
-              onChange={(e) => setValue('discount', formatCentsInput(e.target.value))}
-              defaultValue={formatCentsDisplay(watch('discount'))}
+              max={isPercentage ? '100' : undefined}
+              key={isPercentage ? 'pct' : 'fixed'}
+              onChange={(e) =>
+                setValue(
+                  'discount',
+                  isPercentage
+                    ? Math.round(parseFloat(e.target.value) || 0)
+                    : formatCentsInput(e.target.value),
+                  { shouldDirty: true },
+                )
+              }
+              defaultValue={
+                isPercentage
+                  ? String(watch('discount'))
+                  : formatCentsDisplay(watch('discount'))
+              }
               className={`pl-10 ${errors.discount ? 'border-red-500' : ''}`}
               disabled={isLoading}
             />

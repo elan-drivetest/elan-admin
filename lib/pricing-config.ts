@@ -15,7 +15,7 @@ import type { SystemSetting } from '@/types/admin';
  */
 
 export interface PickupPricingConfig {
-  /** km charged at the higher rate (`base_distance`) */
+  /** km charged at `baseRate` before `normalRate` takes over (`base_distance`) */
   baseDistance: number;
   /** cents per km inside `baseDistance` (`base_rate`) */
   baseRate: number;
@@ -104,6 +104,50 @@ export function resolvePickupPricing(
  */
 export function isPricingCriticalSetting(key: string): key is PickupPricingKey {
   return (PICKUP_PRICING_KEYS as string[]).includes(key);
+}
+
+// ---------------------------------------------------------------------------
+// Booking creation rules
+// ---------------------------------------------------------------------------
+
+/**
+ * `booking_min_lead_days` — how far ahead of now a test date must be.
+ *
+ * STEP 0 of the pricing engine (BUSINESS_LOGIC.md §5.1) rejects anything closer
+ * with 400 "Test date must be greater than N days", and the message interpolates
+ * the live setting. §17.13 names the date-picker minimum as the exact place a
+ * client is likely to hardcode this, so the form reads it from here instead.
+ */
+export const BOOKING_RULE_FALLBACKS = {
+  booking_min_lead_days: 2,
+} as const;
+
+export type BookingRuleKey = keyof typeof BOOKING_RULE_FALLBACKS;
+
+export interface BookingRulesConfig {
+  /** Days of notice a test date needs. The server compares strictly greater. */
+  minLeadDays: number;
+}
+
+export interface BookingRulesResolution {
+  config: BookingRulesConfig;
+  /** Keys that could not be read and fell back. Empty means fully server-driven. */
+  fellBackFor: BookingRuleKey[];
+}
+
+export function resolveBookingRules(
+  settings: SystemSetting[] | null | undefined,
+): BookingRulesResolution {
+  const leadDays = readServerNumber(
+    settings,
+    'booking_min_lead_days',
+    BOOKING_RULE_FALLBACKS.booking_min_lead_days,
+  );
+
+  return {
+    config: { minLeadDays: leadDays.value },
+    fellBackFor: leadDays.fellBack ? ['booking_min_lead_days'] : [],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -204,67 +248,4 @@ export function resolveRefundPolicy(
     },
     fellBackFor,
   };
-}
-// ---------------------------------------------------------------------------
-// Instructor economics (a DIFFERENT contract from the pickup trio)
-// ---------------------------------------------------------------------------
-
-/**
- * `average_distance_per_hour` and `instructor_rate`, as read by
- * `RidesService.findAvailableByInstructor()` (elan-backend
- * `src/rides/rides.service.ts:84-108`).
- *
- * Two deliberate differences from the pickup pricing above — do not "unify" them:
- *   1. Parsed with `parseInt`, NOT `Number`. "50.5" becomes 50, not 50.5.
- *   2. There is NO fallback. Either value non-finite or <= 0 makes the whole
- *      `GET /rides/available` endpoint throw 500 "Ride pricing is temporarily
- *      unavailable". So we report unavailability rather than substituting a
- *      number the server would never have used.
- */
-export interface RideEconomicsConfig {
-  averageDistancePerHour: number;
-  instructorRate: number;
-}
-
-export type RideEconomicsResolution =
-  | { available: true; config: RideEconomicsConfig }
-  | { available: false; invalidKeys: string[] };
-
-/**
- * The rate the `ride_sessions.hourly_rate` column defaults to.
- *
- * Admin-assigned rides are created without an explicit rate and therefore land
- * on this default, while an instructor who self-accepts gets `instructor_rate`
- * snapshotted instead (`getInstructorRateFromSettings()`, which also falls back
- * to this value). With the seeded settings that means admin-assigned rides pay
- * double for identical work — a known backend inconsistency, surfaced rather
- * than hidden.
- */
-export const RIDE_SESSION_DEFAULT_HOURLY_RATE = 8000;
-
-export function resolveRideEconomics(
-  settings: SystemSetting[] | null | undefined,
-): RideEconomicsResolution {
-  const read = (key: string): number => {
-    const raw = settings?.find((s) => s.key === key)?.value;
-    // parseInt, matching the server exactly.
-    return parseInt(raw as string, 10);
-  };
-
-  const averageDistancePerHour = read('average_distance_per_hour');
-  const instructorRate = read('instructor_rate');
-
-  const invalidKeys: string[] = [];
-  if (!Number.isFinite(averageDistancePerHour) || averageDistancePerHour <= 0) {
-    invalidKeys.push('average_distance_per_hour');
-  }
-  if (!Number.isFinite(instructorRate) || instructorRate <= 0) {
-    invalidKeys.push('instructor_rate');
-  }
-
-  if (invalidKeys.length > 0) {
-    return { available: false, invalidKeys };
-  }
-
-  return { available: true, config: { averageDistancePerHour, instructorRate } };
 }

@@ -17,6 +17,73 @@ export function formatCAD(cents: number | string | null | undefined, opts?: { su
   return opts?.suffix === false ? base : `${base} CAD`;
 }
 
+/**
+ * True when `discount` is a percent rather than an amount in cents.
+ *
+ * The pricing engine treats a coupon as a percentage if `discount_type` says so
+ * OR if it is a failed-test coupon, whatever `discount_type` holds.
+ */
+export function isPercentageCoupon(coupon: {
+  discount_type?: 'percentage' | 'fixed' | null;
+  is_failure_coupon?: boolean;
+}): boolean {
+  return coupon.discount_type === 'percentage' || coupon.is_failure_coupon === true;
+}
+
+/**
+ * Face value of a set of coupons, in cents.
+ *
+ * Only fixed coupons have a face value that can be summed — a percentage
+ * coupon's real discount depends on each booking's total and is recorded in
+ * `coupon_usages`, which no list endpoint aggregates. Percentage coupons are
+ * therefore excluded and counted separately so the UI can say so rather than
+ * quietly folding "10" percent into a dollar total.
+ */
+export function sumFixedCouponValue<
+  T extends {
+    discount: number;
+    usage_count: number;
+    discount_type?: 'percentage' | 'fixed' | null;
+    is_failure_coupon?: boolean;
+  },
+>(coupons: T[]): { total: number; excludedPercentageCoupons: number } {
+  let total = 0;
+  let excludedPercentageCoupons = 0;
+
+  for (const coupon of coupons) {
+    if (isPercentageCoupon(coupon)) {
+      if (coupon.usage_count > 0) excludedPercentageCoupons += 1;
+      continue;
+    }
+    total += coupon.discount * coupon.usage_count;
+  }
+
+  return { total, excludedPercentageCoupons };
+}
+
+/**
+ * Render a coupon's discount the way the pricing engine will apply it.
+ *
+ * `discount` is CENTS for a fixed coupon but a WHOLE PERCENT for a percentage
+ * coupon — and every failed-test coupon is treated as a percentage regardless of
+ * `discount_type`. Formatting it as money unconditionally turns "10% off" into
+ * "$0.10 off", so always route coupon amounts through this.
+ */
+export function formatCouponDiscount(
+  coupon: {
+    discount: number;
+    discount_type?: 'percentage' | 'fixed' | null;
+    is_failure_coupon?: boolean;
+  },
+  opts?: { suffix?: boolean },
+): string {
+  const isPercentage =
+    coupon.discount_type === 'percentage' || coupon.is_failure_coupon === true;
+  return isPercentage
+    ? `${Math.min(coupon.discount, 100)}%`
+    : formatCAD(coupon.discount, opts);
+}
+
 // Add route utilities for sidebar
 export function isActiveRoute(pathname: string, href: string): boolean {
   if (href === '/dashboard') {

@@ -5,6 +5,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DollarSign, Calendar, Users, RefreshCw, Clock, Calculator, Route, Trophy, MapPin, Award } from 'lucide-react';
 import type { DashboardAnalytics, InstructorMetric } from '@/types/admin';
+import { formatCAD } from '@/lib/utils';
 import Link from 'next/link';
 
 interface DashboardAnalyticsMetricsProps {
@@ -29,7 +30,7 @@ export default function DashboardAnalyticsMetrics({ analytics }: DashboardAnalyt
     },
     {
       title: 'Total Revenue',
-      value: `$${(analytics.total_revenue / 100).toLocaleString()} CAD`,
+      value: formatCAD(analytics.total_revenue),
       icon: DollarSign,
       description: 'All time earnings',
       link: null,
@@ -49,10 +50,12 @@ export default function DashboardAnalyticsMetrics({ analytics }: DashboardAnalyt
       link: '/refunds?status=pending',
     },
     {
-      title: 'Avg Salary/Session',
-      value: `$${(analytics.average_salary_per_session / 100).toFixed(0)} CAD`,
+      // The backend computes AVG(ride_sessions.hourly_rate) over completed rides,
+      // so this is an average HOURLY RATE, not a per-session payout.
+      title: 'Avg Hourly Rate',
+      value: `${formatCAD(analytics.average_salary_per_session)}/h`,
       icon: Calculator,
-      description: 'Per session average',
+      description: 'Average across completed rides',
       link: null,
     },
     {

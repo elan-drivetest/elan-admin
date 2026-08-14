@@ -92,7 +92,7 @@ function SidebarContent({ onMobileClose }: { onMobileClose?: () => void }) {
   return (
     <div className="flex h-full w-64 flex-col bg-white border-r">
       {/* Logo Section - Only show on desktop, mobile header handles logo */}
-      <div className="hidden lg:flex h-16 items-center px-6 border-b">
+      <div className="hidden lg:flex h-16 shrink-0 items-center px-6 border-b">
         <Link href="/dashboard" className="flex items-center">
           <Image
             src="/elan-logo.svg"
@@ -106,7 +106,7 @@ function SidebarContent({ onMobileClose }: { onMobileClose?: () => void }) {
       </div>
 
       {/* Mobile: Add top padding and logo */}
-      <div className="lg:hidden pt-4 px-6 pb-2">
+      <div className="lg:hidden shrink-0 pt-4 px-6 pb-2">
         <Link href="/dashboard" className="flex items-center" onClick={handleLinkClick}>
           <Image
             src="/elan-logo.svg"
@@ -120,7 +120,8 @@ function SidebarContent({ onMobileClose }: { onMobileClose?: () => void }) {
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-1">
+      {/* Nav scrolls on its own so the user card below never falls off the viewport */}
+      <nav className="flex-1 min-h-0 overflow-y-auto px-4 py-6 space-y-1">
         <div className="space-y-1">
           {navigationItems.map((item) => (
             <Link
@@ -181,7 +182,7 @@ function SidebarContent({ onMobileClose }: { onMobileClose?: () => void }) {
       </nav>
 
       {/* User Info & Logout */}
-      <div className="border border-primary/20 rounded-lg p-4 m-4 mt-0 bg-gradient-to-b from-primary/5 to-primary/10">
+      <div className="shrink-0 border border-primary/20 rounded-lg p-4 m-4 mt-0 bg-gradient-to-b from-primary/5 to-primary/10">
         <div className="flex items-center px-1 py-2 mb-3">
           <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center mr-3 overflow-hidden">
             {user?.avatar ? (
@@ -253,8 +254,8 @@ export default function Sidebar({ isMobileOpen = false, onMobileClose }: Sidebar
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <div className="hidden lg:flex">
+      {/* Desktop Sidebar - sticky to the viewport so nav + account card stay in view while the page scrolls */}
+      <div className="hidden lg:flex lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:self-start">
         <SidebarContent />
       </div>
 

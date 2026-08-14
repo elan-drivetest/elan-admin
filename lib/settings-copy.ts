@@ -61,8 +61,11 @@ export const SETTING_COPY: Record<string, SettingCopy> = {
   // --- Pickup pricing ------------------------------------------------------
   base_distance: {
     label: 'Included pickup distance',
+    // Deliberately does not call either tier "higher" or "cheaper" — nothing
+    // stops an admin setting the beyond-distance rate above the inside one, and
+    // the worked line below states the real numbers either way.
     meaning:
-      'Pickups are charged at the higher rate up to this distance, and at the cheaper rate beyond it.',
+      'Pickups are charged at one rate up to this distance, and at a different rate beyond it.',
     unit: 'km',
     group: 'pickup',
     risk: 'medium',

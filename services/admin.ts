@@ -239,13 +239,9 @@ export const adminService = {
     return response.data;
   },
 
-  // Get all addons
-  async getAddons(): Promise<AddonsResponse> {
-    const response = await apiClient.get('/addons');
-    return Array.isArray(response.data) ? response.data : [];
-  },
-
-  // Add-on catalogue, namespaced under settings so one admin screen covers both
+  // Add-on catalogue, namespaced under settings so one admin screen covers both.
+  // The customer-facing `GET /addons` is deliberately not wrapped here — it
+  // serialises with group ['me'] and omits `description`.
   async getSettingsAddons(): Promise<AddonsResponse> {
     const response = await apiClient.get('/admin/settings/addons');
     return Array.isArray(response.data) ? response.data : [];

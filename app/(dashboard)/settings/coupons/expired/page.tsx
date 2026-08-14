@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Gift, Calendar, DollarSign, ArrowLeft } from 'lucide-react';
 import { useExpiredCoupons } from '@/hooks/useAdmin';
 import CursorPagination from '@/components/ui/CursorPagination';
+import { formatCAD, sumFixedCouponValue } from '@/lib/utils';
 import type { AdminCouponsParams } from '@/types/admin';
 
 export default function ExpiredCouponsPage() {
@@ -25,13 +26,23 @@ export default function ExpiredCouponsPage() {
   const metrics = React.useMemo(() => {
     const totalExpired = expiredCoupons.length;
     const totalUsage = expiredCoupons.reduce((sum, c) => sum + c.usage_count, 0);
-    const totalValue = expiredCoupons.reduce((sum, c) => sum + (c.discount * c.usage_count), 0);
+    // Percentage coupons have no summable face value — see sumFixedCouponValue.
+    const { total: totalValue, excludedPercentageCoupons } =
+      sumFixedCouponValue(expiredCoupons);
     const avgUsage = totalExpired > 0 ? Math.round(totalUsage / totalExpired) : 0;
 
     return [
       { title: 'Expired Coupons', value: totalExpired.toString(), icon: Calendar },
       { title: 'Total Usage', value: totalUsage.toString(), icon: Gift },
-      { title: 'Total Value Used', value: `$${(totalValue / 100).toLocaleString()}`, icon: DollarSign },
+      {
+        title: excludedPercentageCoupons > 0 ? 'Fixed-coupon value used' : 'Total Value Used',
+        value: formatCAD(totalValue, { suffix: false }),
+        icon: DollarSign,
+        trend:
+          excludedPercentageCoupons > 0
+            ? `Excludes ${excludedPercentageCoupons} used % coupon${excludedPercentageCoupons === 1 ? '' : 's'}`
+            : undefined,
+      },
       { title: 'Avg Usage per Coupon', value: avgUsage.toString(), icon: Gift }
     ];
   }, [expiredCoupons]);

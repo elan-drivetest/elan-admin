@@ -752,40 +752,13 @@ export function useUpdateTestCenter() {
   return { updateTestCenter, isLoading, error };
 }
 
-export function useAddons() {
-  const [data, setData] = useState<AddonsResponse>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<ApiError | null>(null);
-
-  const fetchAddons = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const response = await adminService.getAddons();
-      setData(Array.isArray(response) ? response : []);
-    } catch (err: any) {
-      console.error('Addons fetch error:', err);
-      setError({
-        message: err?.response?.data?.message || 'Failed to fetch addons',
-        code: 'FETCH_ADDONS_ERROR'
-      });
-      setData([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAddons();
-  }, [fetchAddons]);
-
-  return { data, isLoading, error, refetch: fetchAddons };
-}
-
 /**
- * The add-on catalogue as the settings screen sees it
- * (`GET /admin/settings/addons`). Same rows as `useAddons`, different route —
- * this one is the admin-namespaced read that pairs with the PUT.
+ * The add-on catalogue (`GET /admin/settings/addons`).
+ *
+ * This is the admin-namespaced read that pairs with the PUT, and the only one
+ * this app uses. The customer-facing `GET /addons` returns the same rows
+ * serialised with group `['me']`, which drops `description` — so an admin screen
+ * reading it would show a poorer view of a catalogue it can edit.
  */
 export function useSettingsAddons() {
   const [data, setData] = useState<AddonsResponse>([]);

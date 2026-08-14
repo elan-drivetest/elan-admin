@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { adminService } from '@/services/admin';
-import { bookingUtils } from '@/lib/utils/booking-calculations';
-import { getApiErrorMessages } from '@/lib/utils';
+import { formatPrice } from '@/lib/utils/booking-calculations';
+import { getApiErrorMessages, formatCouponDiscount } from '@/lib/utils';
 import type { CouponVerificationResponse, AdminCoupon } from '@/types/admin';
 
 interface CouponVerificationAdminProps {
@@ -26,6 +26,9 @@ const toVerification = (c: AdminCoupon): CouponVerificationResponse => ({
   description: c.description,
   code: c.code,
   discount: c.discount,
+  // Carried through so the price preview knows whether `discount` is cents or
+  // percent — dropping it here made every percentage coupon read as $0.10.
+  discount_type: c.discount_type,
   is_recurrent: c.is_recurrent,
   is_failure_coupon: c.is_failure_coupon,
   min_purchase_amount: c.min_purchase_amount,
@@ -98,7 +101,7 @@ export default function CouponVerificationAdmin({
                   {`Coupon "${appliedCoupon.code}" applied`}
                 </span>
                 <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
-                  {bookingUtils.formatPrice(appliedCoupon.discount)} OFF
+                  {formatCouponDiscount(appliedCoupon, { suffix: false })} OFF
                 </Badge>
               </div>
               {appliedCoupon.description && (
@@ -106,7 +109,7 @@ export default function CouponVerificationAdmin({
               )}
               {appliedCoupon.min_purchase_amount > 0 && (
                 <p className="text-xs text-green-600 mt-1">
-                  Minimum purchase: {bookingUtils.formatPrice(appliedCoupon.min_purchase_amount)}
+                  Minimum purchase: {formatPrice(appliedCoupon.min_purchase_amount)}
                 </p>
               )}
             </div>
@@ -123,7 +126,7 @@ export default function CouponVerificationAdmin({
             id: c.id,
             label: c.code,
             subtitle: c.description || c.name,
-            badge: `${bookingUtils.formatPrice(c.discount)} OFF`,
+            badge: `${formatCouponDiscount(c, { suffix: false })} OFF`,
           }))}
           value={null}
           onSelect={handleSelect}

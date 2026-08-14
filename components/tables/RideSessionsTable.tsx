@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table';
 import { TableSkeleton } from '@/components/ui/loading-state';
 import type { AdminRideSession, AdminRideSessionsParams } from '@/types/admin';
+import { formatCAD } from '@/lib/utils';
 
 interface RideSessionsTableProps {
   title: string;
@@ -34,9 +35,8 @@ export default function RideSessionsTable({
   onRefresh,
   onViewDetails
 }: RideSessionsTableProps) {
-  const formatPrice = (price: number) => {
-    return `$${(price / 100).toFixed(0)} CAD`;
-  };
+  // Was toFixed(0), which silently dropped cents off every payout figure.
+  const formatPrice = (price: number) => formatCAD(price);
 
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {

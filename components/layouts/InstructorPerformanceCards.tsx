@@ -5,6 +5,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trophy, Route, Users } from 'lucide-react';
 import type { DashboardAnalytics } from '@/types/admin';
+import { formatCAD } from '@/lib/utils';
 
 interface InstructorPerformanceCardsProps {
   analytics: DashboardAnalytics;
@@ -14,14 +15,17 @@ export default function InstructorPerformanceCards({ analytics }: InstructorPerf
   const performanceMetrics = [
     {
       title: 'Top Earner',
-      amount: `$${(analytics.top_earner.value / 100).toFixed(0)} CAD`,
+      // SUM(hourly_rate * total_hours) — cents.
+      amount: formatCAD(analytics.top_earner.value),
       instructorName: analytics.top_earner.name,
       icon: Trophy,
       description: analytics.top_earner.description,
     },
     {
       title: 'Most Distance',
-      amount: `${(analytics.most_distance_instructor.value / 100).toFixed(1)}km total`,
+      // SUM(ride_sessions.total_distance) — KILOMETRES, not cents. Dividing this
+      // by 100 understated every distance by two orders of magnitude.
+      amount: `${analytics.most_distance_instructor.value.toFixed(1)} km total`,
       instructorName: analytics.most_distance_instructor.name,
       icon: Route,
       description: analytics.most_distance_instructor.description,

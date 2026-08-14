@@ -1,4 +1,4 @@
-// components/admin/booking/AddOnSelectionAdmin.tsx
+// components/booking/AddOnSelectionAdmin.tsx
 'use client';
 
 import React from 'react';
@@ -6,18 +6,23 @@ import { Check, Clock, GraduationCap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { bookingUtils } from '@/lib/utils/booking-calculations';
+import { formatPrice, type BookingTestType } from '@/lib/utils/booking-calculations';
+import { formatAddonDuration, isAddonNameLocked } from '@/lib/addon-rules';
 import type { Addon } from '@/types/admin';
 
 interface AddOnSelectionAdminProps {
   addons: Addon[];
   selectedAddon?: Addon | null;
   onAddonSelect: (addon: Addon | null) => void;
-  testType: 'G2' | 'G';
-  freePerks?: {
-    free_30min_lesson: boolean;
-    free_1hr_lesson: boolean;
-  };
+  testType: BookingTestType;
+  /**
+   * The long-trip credit in cents that WILL apply if an add-on is selected
+   * (0 when the pickup is not beyond `base_distance`). Computed by the parent
+   * from the live pricing config so this component invents no prices of its own.
+   */
+  concession?: number;
+  /** `base_distance` from settings, for the explanatory copy only. */
+  baseDistanceKm?: number;
   className?: string;
 }
 
@@ -25,71 +30,33 @@ interface AddOnCardProps {
   addon: Addon;
   isSelected: boolean;
   onSelect: () => void;
-  isUpgrade?: boolean;
-  upgradeFrom?: string;
-  originalPrice?: number;
+  concession: number;
 }
 
 const AddOnCard: React.FC<AddOnCardProps> = ({
   addon,
   isSelected,
   onSelect,
-  isUpgrade = false,
-  upgradeFrom,
-  originalPrice
+  concession,
 }) => {
-  const formatDuration = (duration: number | null): string => {
-    if (!duration) return 'Mock Test';
-    
-    const minutes = Math.round(duration / 60);
-    if (minutes >= 60) {
-      const hours = Math.floor(minutes / 60);
-      return `${hours} hour${hours > 1 ? 's' : ''}`;
-    }
-    return `${minutes} minutes`;
-  };
-
-  const getIcon = () => {
-    if (addon.name.toLowerCase().includes('mock')) {
-      return <GraduationCap size={20} className="text-blue-500" />;
-    }
-    return <Clock size={20} className="text-green-500" />;
-  };
-
-  const getPriceDisplay = () => {
-    if (isUpgrade && originalPrice !== undefined) {
-      const savings = originalPrice - addon.price;
-      return (
-        <div className="text-right">
-          <div className="text-lg font-bold text-green-600">
-            {bookingUtils.formatPrice(addon.price)}
-          </div>
-          <div className="text-xs text-gray-500 line-through">
-            {bookingUtils.formatPrice(originalPrice)}
-          </div>
-          {savings > 0 && (
-            <div className="text-xs text-green-600">
-              Save {bookingUtils.formatPrice(savings)}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <div className="text-lg font-bold text-gray-900">
-        {bookingUtils.formatPrice(addon.price)}
-      </div>
-    );
-  };
+  // `duration` is null for mock tests — the seeder's own marker, rather than
+  // sniffing the name (BUSINESS_LOGIC.md §4.2).
+  const isMockTest = addon.duration === null || addon.duration === undefined;
+  // This row's price IS the long-trip credit, so it is worth pointing out.
+  const isCreditAddon = isAddonNameLocked(addon.name);
+  // The credit is a flat amount, so the marginal cost of this add-on is its
+  // price less the credit — floored at zero, exactly as the server's arithmetic
+  // works out when the 30-minute lesson is the chosen add-on.
+  const effectivePrice = Math.max(0, addon.price - concession);
+  const hasCredit = concession > 0;
 
   return (
     <Card
       className={cn(
         'cursor-pointer transition-all duration-200 hover:shadow-md',
-        isSelected 
-          ? 'border-green-500 bg-green-50 ring-2 ring-green-500/20' 
-          : 'border-gray-200 hover:border-gray-300'
+        isSelected
+          ? 'border-green-500 bg-green-50 ring-2 ring-green-500/20'
+          : 'border-gray-200 hover:border-gray-300',
       )}
       onClick={onSelect}
     >
@@ -97,41 +64,59 @@ const AddOnCard: React.FC<AddOnCardProps> = ({
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3 flex-1">
             <div className="flex-shrink-0 mt-1">
-              {getIcon()}
+              {isMockTest ? (
+                <GraduationCap size={20} className="text-blue-500" />
+              ) : (
+                <Clock size={20} className="text-green-500" />
+              )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className={cn(
-                  'font-medium text-base',
-                  isSelected ? 'text-green-800' : 'text-gray-900'
-                )}>
-                  {formatDuration(addon.duration)}
-                  {addon.name.toLowerCase().includes('mock') && ' Mock Test'}
-                  {addon.name.toLowerCase().includes('lesson') && ' Driving Lesson'}
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <h3
+                  className={cn(
+                    'font-medium text-base',
+                    isSelected ? 'text-green-800' : 'text-gray-900',
+                  )}
+                >
+                  {addon.name}
                 </h3>
-                {isUpgrade && (
-                  <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">
-                    Upgrade
+                {!isMockTest ? (
+                  <Badge variant="secondary" className="bg-gray-100 text-gray-700 text-xs">
+                    {formatAddonDuration(addon.duration)}
+                  </Badge>
+                ) : null}
+                {isCreditAddon && (
+                  <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+                    Sets the long-trip credit
                   </Badge>
                 )}
               </div>
-              
+
               {addon.description && (
-                <p className="text-sm text-gray-600 mb-2">
-                  {addon.description}
-                </p>
+                <p className="text-sm text-gray-600 mb-2">{addon.description}</p>
               )}
 
-              {isUpgrade && upgradeFrom && (
-                <p className="text-xs text-blue-600">
-                  Upgrade from {upgradeFrom}
+              {hasCredit && (
+                <p className="text-xs text-green-700">
+                  Long-trip credit of {formatPrice(concession)} applies to this booking
                 </p>
               )}
             </div>
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
-            {getPriceDisplay()}
+            <div className="text-right">
+              <div className="text-lg font-bold text-gray-900">
+                {formatPrice(addon.price)}
+              </div>
+              {hasCredit && (
+                <div className="text-xs text-green-600">
+                  {effectivePrice === 0
+                    ? 'free after credit'
+                    : `${formatPrice(effectivePrice)} after credit`}
+                </div>
+              )}
+            </div>
             {isSelected && (
               <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
                 <Check size={14} className="text-white" />
@@ -149,74 +134,19 @@ export default function AddOnSelectionAdmin({
   selectedAddon,
   onAddonSelect,
   testType,
-  freePerks,
-  className
+  concession = 0,
+  baseDistanceKm,
+  className,
 }: AddOnSelectionAdminProps) {
-  // Filter addons by test type
-  const filteredAddons = addons.filter(addon => {
-    if (testType === 'G2') return addon.type === 'LESSON_G2';
-    if (testType === 'G') return addon.type === 'LESSON_G';
-    return true;
-  });
-
-  // Get mock test and lesson addons
-  const mockTestAddon = filteredAddons.find(addon => 
-    addon.name.toLowerCase().includes('mock')
-  );
-  const lessonAddon = filteredAddons.find(addon => 
-    addon.name.toLowerCase().includes('lesson') && 
-    addon.name.toLowerCase().includes('1 hour')
-  );
-
-  // Calculate upgrade pricing
-  const getUpgradeInfo = (addon: Addon) => {
-    const isMockTest = addon.name.toLowerCase().includes('mock');
-    const isLesson = addon.name.toLowerCase().includes('lesson');
-
-    if (freePerks?.free_30min_lesson && !freePerks.free_1hr_lesson) {
-      // Has free 30-min lesson
-      if (isMockTest) {
-        const basePrice = testType === 'G2' ? 5499 : 6499; // Full mock test price
-        const upgradePrice = testType === 'G2' ? 2999 : 3499; // Upgrade price
-        return {
-          isUpgrade: true,
-          upgradeFrom: 'Free 30-minute lesson',
-          originalPrice: basePrice,
-          actualPrice: upgradePrice
-        };
-      }
-      if (isLesson) {
-        const basePrice = testType === 'G2' ? 5000 : 6000; // Full lesson price
-        const upgradePrice = testType === 'G2' ? 2500 : 3000; // Upgrade price
-        return {
-          isUpgrade: true,
-          upgradeFrom: 'Free 30-minute lesson',
-          originalPrice: basePrice,
-          actualPrice: upgradePrice
-        };
-      }
-    }
-
-    if (freePerks?.free_1hr_lesson) {
-      // Has free 1-hour lesson
-      if (isMockTest) {
-        const basePrice = testType === 'G2' ? 5499 : 6499; // Full mock test price
-        const upgradePrice = 499; // Fixed upgrade price for both G2 and G
-        return {
-          isUpgrade: true,
-          upgradeFrom: 'Free 1-hour lesson',
-          originalPrice: basePrice,
-          actualPrice: upgradePrice
-        };
-      }
-    }
-
-    return { isUpgrade: false };
-  };
+  // The server files mock tests under LESSON_G / LESSON_G2 too, so this single
+  // type filter is the whole catalogue for a test type — every one of them is
+  // selectable at its listed price.
+  const addonType = testType === 'G' ? 'LESSON_G' : 'LESSON_G2';
+  const filteredAddons = addons.filter((addon) => addon.type === addonType);
 
   const handleAddonSelect = (addon: Addon) => {
     if (selectedAddon?.id === addon.id) {
-      onAddonSelect(null); // Deselect if already selected
+      onAddonSelect(null);
     } else {
       onAddonSelect(addon);
     }
@@ -227,50 +157,45 @@ export default function AddOnSelectionAdmin({
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Add-ons</h3>
         <p className="text-sm text-gray-600 mb-4">
-          Enhance your road test experience with professional instruction or practice.
+          Enhance the road test with professional instruction or practice.
         </p>
       </div>
 
-      {/* Show free perks info */}
-      {(freePerks?.free_30min_lesson || freePerks?.free_1hr_lesson) && (
+      {/* The credit only exists when an add-on is bought — say so, rather than
+          advertising a free lesson the booking will never carry. */}
+      {concession > 0 && (
         <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-4">
           <div className="flex items-center gap-2 mb-1">
             <Check size={16} className="text-green-600" />
             <span className="text-sm font-medium text-green-800">
-              Free Perk Included!
+              {formatPrice(concession)} long-trip credit available
             </span>
           </div>
           <p className="text-sm text-green-700">
-            {freePerks.free_1hr_lesson 
-              ? 'You get a free 1-hour driving lesson with this booking'
-              : 'You get a free 30-minute driving lesson with this booking'
-            }
+            This pickup is beyond {baseDistanceKm ?? 'the base'} km, so selecting any
+            add-on below takes {formatPrice(concession)} off the total.
           </p>
           <p className="text-xs text-green-600 mt-1">
-            You can upgrade to other options below for additional cost.
+            The credit applies only if an add-on is selected — choosing none forfeits it.
           </p>
         </div>
       )}
 
       <div className="space-y-3">
-        {/* Mock Test Option */}
-        {mockTestAddon && (
-          <AddOnCard
-            addon={mockTestAddon}
-            isSelected={selectedAddon?.id === mockTestAddon.id}
-            onSelect={() => handleAddonSelect(mockTestAddon)}
-            {...getUpgradeInfo(mockTestAddon)}
-          />
-        )}
-
-        {/* Driving Lesson Option */}
-        {lessonAddon && !freePerks?.free_1hr_lesson && (
-          <AddOnCard
-            addon={lessonAddon}
-            isSelected={selectedAddon?.id === lessonAddon.id}
-            onSelect={() => handleAddonSelect(lessonAddon)}
-            {...getUpgradeInfo(lessonAddon)}
-          />
+        {filteredAddons.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No add-ons available for a {testType} road test.
+          </p>
+        ) : (
+          filteredAddons.map((addon) => (
+            <AddOnCard
+              key={addon.id}
+              addon={addon}
+              isSelected={selectedAddon?.id === addon.id}
+              onSelect={() => handleAddonSelect(addon)}
+              concession={concession}
+            />
+          ))
         )}
       </div>
 
@@ -278,9 +203,9 @@ export default function AddOnSelectionAdmin({
       <Card
         className={cn(
           'cursor-pointer transition-all duration-200 hover:shadow-md',
-          !selectedAddon 
-            ? 'border-green-500 bg-green-50 ring-2 ring-green-500/20' 
-            : 'border-gray-200 hover:border-gray-300'
+          !selectedAddon
+            ? 'border-green-500 bg-green-50 ring-2 ring-green-500/20'
+            : 'border-gray-200 hover:border-gray-300',
         )}
         onClick={() => onAddonSelect(null)}
       >
@@ -290,11 +215,9 @@ export default function AddOnSelectionAdmin({
               <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
                 {!selectedAddon && <Check size={12} className="text-green-500" />}
               </div>
-              <span className="font-medium text-gray-900">
-                No additional add-on
-              </span>
+              <span className="font-medium text-gray-900">No additional add-on</span>
             </div>
-            <span className="text-sm text-gray-600">$0.00</span>
+            <span className="text-sm text-gray-600">{formatPrice(0)}</span>
           </div>
         </CardContent>
       </Card>

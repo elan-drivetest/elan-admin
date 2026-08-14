@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Gift, Users, DollarSign, Calendar, Plus } from 'lucide-react';
 import { useCoupons } from '@/hooks/useAdmin';
 import CursorPagination from '@/components/ui/CursorPagination';
+import { formatCAD, sumFixedCouponValue } from '@/lib/utils';
 import type { AdminCouponsParams } from '@/types/admin';
 
 export default function CouponsPage() {
@@ -26,13 +27,22 @@ export default function CouponsPage() {
     const totalCoupons = meta?.total ?? coupons.length;
     const activeCoupons = coupons.filter(c => c.is_active && !c.is_expired).length;
     const totalUsage = coupons.reduce((sum, c) => sum + c.usage_count, 0);
-    const totalValue = coupons.reduce((sum, c) => sum + (c.discount * c.usage_count), 0);
+    // Percentage coupons have no summable face value — see sumFixedCouponValue.
+    const { total: totalValue, excludedPercentageCoupons } = sumFixedCouponValue(coupons);
 
     return [
       { title: meta?.total ? 'Total Coupons' : 'Coupons (page)', value: totalCoupons.toString(), icon: Gift },
       { title: 'Active (page)', value: activeCoupons.toString(), icon: Calendar },
       { title: 'Usage (page)', value: totalUsage.toString(), icon: Users },
-      { title: 'Value (page)', value: `$${(totalValue / 100).toLocaleString()}`, icon: DollarSign }
+      {
+        title: excludedPercentageCoupons > 0 ? 'Fixed-coupon value (page)' : 'Value (page)',
+        value: formatCAD(totalValue, { suffix: false }),
+        icon: DollarSign,
+        trend:
+          excludedPercentageCoupons > 0
+            ? `Excludes ${excludedPercentageCoupons} used % coupon${excludedPercentageCoupons === 1 ? '' : 's'}`
+            : undefined,
+      },
     ];
   }, [coupons, meta]);
 

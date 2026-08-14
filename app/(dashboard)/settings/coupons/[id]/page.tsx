@@ -15,12 +15,14 @@ import {
   Edit,
   Loader2,
   DollarSign,
+  Percent,
   TrendingUp,
   Activity,
   BarChart3
 } from 'lucide-react';
 import { useCouponDetail } from '@/hooks/useAdmin';
 import EditCouponForm from '@/components/forms/EditCouponForm';
+import { formatCAD, formatCouponDiscount, isPercentageCoupon } from '@/lib/utils';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -46,9 +48,7 @@ export default function CouponDetailPage({ params }: PageProps) {
     return <Badge className="bg-green-100 text-green-800">Active</Badge>;
   };
 
-  const formatPrice = (amount: number) => {
-    return `$${(amount / 100).toFixed(2)} CAD`;
-  };
+  const formatPrice = (amount: number) => formatCAD(amount);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -174,10 +174,16 @@ export default function CouponDetailPage({ params }: PageProps) {
                     <p className="text-lg font-mono bg-gray-100 px-3 py-2 rounded">{coupon.code}</p>
                   </div>
                   <div>
-                    <h4 className="font-medium text-sm text-gray-700 mb-2">Discount Amount</h4>
+                    <h4 className="font-medium text-sm text-gray-700 mb-2">Discount</h4>
                     <div className="flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-green-500" />
-                      <span className="text-lg font-medium text-green-600">{formatPrice(coupon.discount)}</span>
+                      {isPercentageCoupon(coupon) ? (
+                        <Percent className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <DollarSign className="w-4 h-4 text-green-500" />
+                      )}
+                      <span className="text-lg font-medium text-green-600">
+                        {formatCouponDiscount(coupon)}
+                      </span>
                     </div>
                   </div>
                   <div>
@@ -287,10 +293,16 @@ export default function CouponDetailPage({ params }: PageProps) {
                   <div className="bg-green-50 p-3 rounded-lg">
                     <div className="flex items-center gap-2 mb-1">
                       <DollarSign className="w-3 h-3 text-green-600" />
-                      <span className="text-xs font-medium text-green-600">Value</span>
+                      <span className="text-xs font-medium text-green-600">
+                        {isPercentageCoupon(coupon) ? 'Rate' : 'Value'}
+                      </span>
                     </div>
                     <div className="text-sm font-bold text-green-700">
-                      {formatPrice(coupon.discount * coupon.usage_count)}
+                      {/* A percentage coupon's realised value depends on each
+                          booking total, so only the rate can be shown here. */}
+                      {isPercentageCoupon(coupon)
+                        ? formatCouponDiscount(coupon)
+                        : formatPrice(coupon.discount * coupon.usage_count)}
                     </div>
                   </div>
                 </div>
@@ -319,12 +331,16 @@ export default function CouponDetailPage({ params }: PageProps) {
                     <span className="text-xs font-medium text-purple-600">Performance</span>
                   </div>
                   <div className="text-sm text-purple-700">
-                    {coupon.usage_count > 0 ? (
+                    {coupon.usage_count === 0 ? (
+                      <span className="text-gray-500">No usage yet</span>
+                    ) : isPercentageCoupon(coupon) ? (
+                      <span>
+                        <span className="font-semibold">{formatCouponDiscount(coupon)}</span> off each order
+                      </span>
+                    ) : (
                       <span>
                         <span className="font-semibold">{formatPrice(coupon.discount)}</span> per use
                       </span>
-                    ) : (
-                      <span className="text-gray-500">No usage yet</span>
                     )}
                   </div>
                 </div>
@@ -351,7 +367,20 @@ export default function CouponDetailPage({ params }: PageProps) {
                   <div className="mt-3 p-3 bg-green-50 rounded-lg">
                     <div className="text-xs text-green-700 font-medium mb-1">Total Impact</div>
                     <div className="text-sm text-green-800">
-                      <span className="font-semibold">{formatPrice(coupon.discount * coupon.usage_count)}</span> in discounts given
+                      {isPercentageCoupon(coupon) ? (
+                        <>
+                          Used {coupon.usage_count} time{coupon.usage_count === 1 ? '' : 's'}. A
+                          percentage discount varies per booking, so the total is only
+                          available from the usage records.
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-semibold">
+                            {formatPrice(coupon.discount * coupon.usage_count)}
+                          </span>{' '}
+                          in discounts given
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

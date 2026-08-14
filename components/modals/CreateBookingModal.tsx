@@ -27,7 +27,9 @@ export default function CreateBookingModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-6xl max-h-[95vh] overflow-y-auto p-0">
+      {/* Wide: the form and the price panel sit side by side, and the price
+          panel needs room to show its figures without wrapping. */}
+      <DialogContent className="sm:max-w-[min(1500px,95vw)] max-h-[95vh] overflow-y-auto p-0">
         <div className="p-6 border-b border-gray-200">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">

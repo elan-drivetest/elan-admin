@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/table';
 import { TableSkeleton } from '@/components/ui/loading-state';
 import CouponDetailModal from '@/components/modals/CouponDetailModal';
-import { formatCAD } from '@/lib/utils';
+import { formatCAD, formatCouponDiscount } from '@/lib/utils';
 import type { AdminCoupon, AdminCouponsParams } from '@/types/admin';
 
 interface CouponsTableProps {
@@ -201,7 +201,8 @@ export default function CouponsTable({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="font-medium text-green-600">{formatCAD(coupon.discount)}</span>
+                    {/* `discount` is a percent for percentage/failure coupons. */}
+                    <span className="font-medium text-green-600">{formatCouponDiscount(coupon)}</span>
                   </TableCell>
                   <TableCell>
                     <span className="text-sm">{formatCAD(coupon.min_purchase_amount)}</span>

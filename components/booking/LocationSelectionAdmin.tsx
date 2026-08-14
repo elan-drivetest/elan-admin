@@ -7,8 +7,9 @@ import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useDistanceCalculation, usePricingCalculation } from '@/hooks/useBookingCalculation';
-import { bookingUtils } from '@/lib/utils/booking-calculations';
+import { useDistanceCalculation } from '@/hooks/useBookingCalculation';
+import { usePricingConfig } from '@/hooks/usePricingConfig';
+import { calculatePickupPrice, formatPrice } from '@/lib/utils/booking-calculations';
 import type { AddressSearchResponse, TestCenter } from '@/types/admin';
 import { useAddressSearch } from '@/hooks/useAddressSearch';
 
@@ -22,6 +23,11 @@ interface LocationSelectionAdminProps {
     coordinates: { lat: number; lng: number };
     distance?: number;
   }) => void;
+  /**
+   * Raised when a pickup address is chosen but the server distance could not be
+   * fetched, so the booking cannot be priced. The parent blocks submission.
+   */
+  onDistanceUnavailableChange?: (unavailable: boolean) => void;
   testCenter?: TestCenter;
   className?: string;
 }
@@ -66,6 +72,7 @@ export default function LocationSelectionAdmin({
   selectedOption,
   onOptionChange,
   onLocationSelect,
+  onDistanceUnavailableChange,
   testCenter,
   className,
 }: LocationSelectionAdminProps) {
@@ -79,18 +86,18 @@ export default function LocationSelectionAdmin({
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const { results, loading: searchLoading, error: searchError, searchAddresses, clearResults } = useAddressSearch();
-  const { distance, loading: distanceLoading, calculateDistance } = useDistanceCalculation();
-  const { pricing, perks, updatePricing } = usePricingCalculation();
+  const {
+    distance,
+    loading: distanceLoading,
+    error: distanceError,
+    calculateDistance,
+  } = useDistanceCalculation();
+  const { config: pricing, isLoading: pricingLoading } = usePricingConfig();
 
-  // Update pricing when distance or test center changes
-  useEffect(() => {
-    if (testCenter && distance !== null) {
-      updatePricing({
-        testCenter,
-        distance,
-      });
-    }
-  }, [testCenter, distance, updatePricing]);
+  // The pickup fee mirrors the server's tiers using the live settings values —
+  // it is never derived from hardcoded rates.
+  const pickupPrice =
+    distance !== null ? calculatePickupPrice(distance, pricing) : null;
 
   const handleLocationInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -119,11 +126,13 @@ export default function LocationSelectionAdmin({
 
     if (testCenter && lat && lng) {
       const calculatedDistance = await calculateDistance({ lat, lng }, testCenter);
-      
+
+      onDistanceUnavailableChange?.(calculatedDistance === null);
+
       onLocationSelect?.({
         address,
         coordinates: { lat, lng },
-        distance: calculatedDistance || undefined,
+        distance: calculatedDistance ?? undefined,
       });
     }
   };
@@ -151,14 +160,16 @@ export default function LocationSelectionAdmin({
 
         if (testCenter) {
           const calculatedDistance = await calculateDistance({ lat: latitude, lng: longitude }, testCenter);
-          
+
+          onDistanceUnavailableChange?.(calculatedDistance === null);
+
           onLocationSelect?.({
             address,
             coordinates: { lat: latitude, lng: longitude },
-            distance: calculatedDistance || undefined,
+            distance: calculatedDistance ?? undefined,
           });
         }
-        
+
         setIsGettingLocation(false);
       },
       (error) => {
@@ -190,6 +201,8 @@ export default function LocationSelectionAdmin({
       setLocationError(null);
       clearResults();
       setShowSuggestions(false);
+      // Meeting at the centre prices at distance 0 — nothing left to block on.
+      onDistanceUnavailableChange?.(false);
     }
   };
 
@@ -314,6 +327,15 @@ export default function LocationSelectionAdmin({
             </div>
           )}
 
+          {/* The distance call drives the whole pickup fare, so a failure here is
+              surfaced rather than silently replaced with a local estimate. */}
+          {distanceError && (
+            <div className="mt-2 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-red-600" />
+              <span className="text-sm text-red-800">{distanceError}</span>
+            </div>
+          )}
+
           {/* Selected Location Confirmation */}
           {selectedResult && (
             <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
@@ -338,41 +360,22 @@ export default function LocationSelectionAdmin({
             </div>
           )}
 
-          {/* Distance and Pricing Info */}
-          {distance !== null && pricing && (
+          {/* Distance and pickup fare. The full total — including the add-on
+              concession and any coupon — lives in the pricing sidebar. */}
+          {distance !== null && pickupPrice !== null && !pricingLoading && (
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <h4 className="text-sm font-medium text-blue-900 mb-2">Distance & Pricing</h4>
+              <h4 className="text-sm font-medium text-blue-900 mb-2">Distance &amp; Pickup Fare</h4>
               <div className="space-y-1 text-sm text-blue-800">
-                <p>• Distance: {distance.toFixed(1)} km</p>
-                <p>• Pickup fee: {bookingUtils.formatPrice(pricing.pickupPrice)}</p>
+                <p>• Driving distance: {distance.toFixed(1)} km</p>
+                <p>• Pickup fee: {formatPrice(pickupPrice)}</p>
+                {distance > pricing.baseDistance && (
+                  <p className="text-xs text-blue-700">
+                    Beyond {pricing.baseDistance} km, so the reduced{' '}
+                    {formatPrice(pricing.normalRate)}/km rate applies to the excess.
+                    Adding an add-on also credits a 30-minute lesson.
+                  </p>
+                )}
               </div>
-            </div>
-          )}
-
-          {/* Free Perks Display */}
-          {perks && (perks.free_dropoff || perks.free_30min_lesson || perks.free_1hr_lesson) && (
-            <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3">
-              <h4 className="font-medium text-sm text-green-900 mb-2">🎉 Free Perks Included!</h4>
-              <ul className="space-y-1">
-                {perks.free_dropoff && (
-                  <li className="flex items-center gap-1 text-xs text-green-800">
-                    <Check size={14} className="text-green-600" />
-                    Free dropoff service
-                  </li>
-                )}
-                {perks.free_30min_lesson && (
-                  <li className="flex items-center gap-1 text-xs text-green-800">
-                    <Check size={14} className="text-green-600" />
-                    Free 30-minute driving lesson
-                  </li>
-                )}
-                {perks.free_1hr_lesson && (
-                  <li className="flex items-center gap-1 text-xs text-green-800">
-                    <Check size={14} className="text-green-600" />
-                    Free 1-hour driving lesson
-                  </li>
-                )}
-              </ul>
             </div>
           )}
         </div>

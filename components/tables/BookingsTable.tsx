@@ -18,7 +18,8 @@ import {
 import { TableSkeleton } from '@/components/ui/loading-state';
 import ErrorBoundary from '@/components/ui/error-boundary';
 import BookingDetailModal from '@/components/modals/BookingDetailModal';
-import { formatBookingStatus } from '@/lib/utils';
+import { formatBookingStatus, formatCAD } from '@/lib/utils';
+import { deriveBookingAdjustment } from '@/lib/utils/booking-calculations';
 import type { AdminBooking } from '@/types/admin';
 
 export interface BookingTableData {
@@ -75,9 +76,7 @@ export default function BookingsTable({
     );
   };
 
-  const formatPrice = (price: number) => {
-    return `$${(price / 100).toFixed(2)}`;
-  };
+  const formatPrice = (price: number) => formatCAD(price, { suffix: false });
 
   const formatPickupLocation = (booking: BookingTableData) => {
     if (booking.pickupLocation.includes('Meet at Center')) {
@@ -200,16 +199,37 @@ export default function BookingsTable({
                           {getTestResultBadge(booking.testResult)}
                         </TableCell>
                         <TableCell>
-                          <div className="text-sm">
-                            <div className="flex items-center gap-1 font-medium text-green-600">
-                              {formatPrice(booking.totalPrice)}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              Base: {formatPrice(booking.basePrice)}
-                              {booking.pickupPrice > 0 && ` + Pickup: ${formatPrice(booking.pickupPrice)}`}
-                              {booking.addonsPrice > 0 && ` + Addons: ${formatPrice(booking.addonsPrice)}`}
-                            </div>
-                          </div>
+                          {/* The components do NOT sum to total_price when a
+                              long-trip credit or a coupon applied, so the gap is
+                              derived and shown rather than left unexplained. */}
+                          {(() => {
+                            const { adjustment } = deriveBookingAdjustment({
+                              base_price: booking.basePrice,
+                              pickup_price: booking.pickupPrice,
+                              addons_price: booking.addonsPrice,
+                              total_price: booking.totalPrice,
+                            });
+                            return (
+                              <div className="text-sm">
+                                <div className="flex items-center gap-1 font-medium text-green-600">
+                                  {formatPrice(booking.totalPrice)}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Base: {formatPrice(booking.basePrice)}
+                                  {booking.pickupPrice > 0 && ` + Pickup: ${formatPrice(booking.pickupPrice)}`}
+                                  {booking.addonsPrice > 0 && ` + Addons: ${formatPrice(booking.addonsPrice)}`}
+                                </div>
+                                {adjustment > 0 && (
+                                  <div className="text-xs text-red-600">
+                                    − Adjustments: {formatPrice(adjustment)}
+                                    {booking.originalBooking.coupon_code
+                                      ? ` (${booking.originalBooking.coupon_code})`
+                                      : ''}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           {booking.hasInstructor && booking.instructorName ? (

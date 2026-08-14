@@ -27,6 +27,7 @@ import type { AdminCustomerDetail, CustomerBooking } from '@/types/admin';
 import Image from 'next/image';
 import FilePreviewerModal from './FilePreviewerModal';
 import AssignInstructorModal from './AssignInstructorModal';
+import { formatCAD } from '@/lib/utils';
 
 interface CustomerDetailModalProps {
   isOpen: boolean;
@@ -51,9 +52,7 @@ export default function CustomerDetailModal({
     !NON_ASSIGNABLE_STATUSES.includes((booking.status || '').toLowerCase());
 
   // Format currency from cents to dollars
-  const formatPrice = (price: number) => {
-    return `$${(price / 100).toFixed(2)} CAD`;
-  };
+  const formatPrice = (price: number) => formatCAD(price);
 
   // Get status badge styling
   const getStatusBadge = (status: string) => {

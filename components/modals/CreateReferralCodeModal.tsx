@@ -1,7 +1,7 @@
 // components/modals/CreateReferralCodeModal.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import FormErrorAlert from '@/components/ui/form-error-alert';
 import { Gift, DollarSign, Hash, Loader2 } from 'lucide-react';
 import { adminService } from '@/services/admin';
 import { getApiErrorMessages } from '@/lib/utils';
+import { useReferralCodeDefaults } from '@/hooks/useReferralBonus';
 import { toast } from 'sonner';
 import type { CreateReferralCodeRequest } from '@/types/admin';
 
@@ -27,17 +28,31 @@ export default function CreateReferralCodeModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessages, setErrorMessages] = useState<string[]>([]);
 
+  // `admin_referral_price` and `referral_min_rides` are what the server would
+  // apply to a new code, so the form opens on them instead of on literals that
+  // go stale the moment Settings is edited. Both stay editable per code.
+  const defaults = useReferralCodeDefaults();
+
   // Form state
   const [code, setCode] = useState('');
   const [amount, setAmount] = useState('');
-  const [minRidesRequired, setMinRidesRequired] = useState('5');
+  const [minRidesRequired, setMinRidesRequired] = useState('');
 
   const resetForm = () => {
     setCode('');
     setAmount('');
-    setMinRidesRequired('5');
+    setMinRidesRequired('');
     setErrorMessages([]);
   };
+
+  // Seed the two configured fields when the modal opens — and again if the
+  // settings read lands after it opened. Editing either is never overwritten,
+  // because seeding only ever fills a field the admin has left empty.
+  useEffect(() => {
+    if (!isOpen || defaults.isLoading) return;
+    setAmount((current) => (current === '' ? (defaults.amountCents / 100).toFixed(2) : current));
+    setMinRidesRequired((current) => (current === '' ? String(defaults.minRides) : current));
+  }, [isOpen, defaults.isLoading, defaults.amountCents, defaults.minRides]);
 
   const handleClose = () => {
     resetForm();
@@ -164,7 +179,8 @@ export default function CreateReferralCodeModal({
               />
             </div>
             <p className="text-xs text-gray-500">
-              Bonus amount awarded when the referral conditions are met
+              Bonus amount awarded when the referral conditions are met. Pre-filled from
+              your Promo code bonus setting.
             </p>
           </div>
 
@@ -182,7 +198,8 @@ export default function CreateReferralCodeModal({
               step="1"
             />
             <p className="text-xs text-gray-500">
-              Number of rides the referred instructor must complete before the bonus is awarded
+              Number of rides the referred instructor must complete before the bonus is
+              awarded. Pre-filled from your Rides required for a bonus setting.
             </p>
           </div>
 

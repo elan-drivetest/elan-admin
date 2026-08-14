@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, MapPin } from 'lucide-react';
 import { useTestCenters } from '@/hooks/useAdmin';
+import { formatCAD } from '@/lib/utils';
 
 interface TestCenterSelectorProps {
   onSelect: (centerId: number) => void;
@@ -21,9 +22,7 @@ export default function TestCenterSelector({
 }: TestCenterSelectorProps) {
   const { data: testCenters, isLoading, error } = useTestCenters();
 
-  const formatPrice = (price: number) => {
-    return `$${(price / 100).toFixed(2)}`;
-  };
+  const formatPrice = (price: number) => formatCAD(price, { suffix: false });
 
   const formatCenterDisplay = (center: any) => {
     return `${center.name} - ${formatPrice(center.base_price)} - ${center.city}, ${center.province}`;

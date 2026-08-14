@@ -322,8 +322,14 @@ export default function CouponUsageTable({
                   
                   <TableCell>
                     <div className="text-sm">
+                      {/* `total_price + discount` reconstructs the pre-coupon price
+                          only when no long-trip credit applied; when both did, the
+                          "before" figure is understated by the credit. `total_price`
+                          is the charged amount either way. */}
                       <div className="font-medium">
-                        <span className="line-through text-gray-500">{formatCAD(usage.total_price + realDiscount(usage))}</span>
+                        <span className="line-through text-gray-500">
+                          {formatCAD(usage.total_price + realDiscount(usage))}
+                        </span>
                       </div>
                       <div className="font-medium text-green-600">{formatCAD(usage.total_price)}</div>
                       <div className="text-xs text-red-600">Saved: {formatCAD(realDiscount(usage))}</div>

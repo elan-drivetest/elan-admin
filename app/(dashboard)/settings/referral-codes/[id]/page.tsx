@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useReferralCodeDetail } from '@/hooks/useAdmin';
 import { adminService } from '@/services/admin';
-import { getApiErrorMessages } from '@/lib/utils';
+import { getApiErrorMessages, formatCAD } from '@/lib/utils';
 import type { UpdateReferralCodeStatusRequest } from '@/types/admin';
 
 interface PageProps {
@@ -64,9 +64,7 @@ export default function ReferralCodeDetailPage({ params }: PageProps) {
     return <Badge className={config.color}>{config.text}</Badge>;
   };
 
-  const formatPrice = (amount: number) => {
-    return `$${(amount / 100).toFixed(2)} CAD`;
-  };
+  const formatPrice = (amount: number) => formatCAD(amount);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Not set';

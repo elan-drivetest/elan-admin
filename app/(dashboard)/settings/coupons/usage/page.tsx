@@ -12,6 +12,7 @@ import { Gift, Users, DollarSign, Calendar, ArrowLeft } from 'lucide-react';
 import { useCouponUsage, useCoupons } from '@/hooks/useAdmin';
 import CursorPagination from '@/components/ui/CursorPagination';
 import type { AdminCouponUsageParams } from '@/types/admin';
+import { formatCAD, isPercentageCoupon } from '@/lib/utils';
 
 export default function CouponUsagePage() {
   const [searchParams, setSearchParams] = useState<AdminCouponUsageParams>({
@@ -23,9 +24,14 @@ export default function CouponUsagePage() {
   const { data: usageData, meta, isLoading, error, refetch } = useCouponUsage(searchParams);
   // The usage record's discount_amount is unreliable; use each coupon's real discount.
   const { data: coupons } = useCoupons({ limit: 100 });
+  // Only FIXED coupons can have their face value substituted here — a
+  // percentage coupon's `discount` is a percent, so mapping it in would report
+  // "10 cents" as the discount. Those fall back to the usage row's own amount.
   const couponDiscounts = React.useMemo(() => {
     const map: Record<string, number> = {};
-    coupons.forEach((c) => { map[c.code] = c.discount; });
+    coupons.forEach((c) => {
+      if (!isPercentageCoupon(c)) map[c.code] = c.discount;
+    });
     return map;
   }, [coupons]);
 
@@ -38,7 +44,7 @@ export default function CouponUsagePage() {
     return [
       { title: meta?.total ? 'Total Usage' : 'Usage (page)', value: totalUsages.toString(), icon: Gift },
       { title: 'Coupons (page)', value: uniqueCoupons.toString(), icon: Calendar },
-      { title: 'Discount (page)', value: `$${(totalDiscount / 100).toLocaleString()}`, icon: DollarSign },
+      { title: 'Discount (page)', value: formatCAD(totalDiscount, { suffix: false }), icon: DollarSign },
       { title: 'Customers (page)', value: uniqueCustomers.toString(), icon: Users }
     ];
   }, [usageData, meta, couponDiscounts]);

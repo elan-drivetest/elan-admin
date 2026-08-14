@@ -16,6 +16,7 @@ import { Plus, Calendar, Users, RefreshCw, Clock, Search } from 'lucide-react';
 import { useAllBookings } from '@/hooks/useAdmin';
 import type { EnhancedBookingData } from '@/components/tables/EnhancedBookingsTable';
 import type { AdminBooking, AdminBookingsParams } from '@/types/admin';
+import { formatCAD } from '@/lib/utils';
 
 // Transform API data to table format
 const transformBookingData = (booking: AdminBooking): EnhancedBookingData => ({
@@ -89,7 +90,7 @@ export default function BookingsPage() {
     return [
       { title: meta?.total ? 'Total bookings' : 'Bookings (page)', value: totalBookings.toString(), icon: Calendar },
       { title: 'Instructors (page)', value: uniqueInstructors.toString().padStart(2, '0'), icon: Users },
-      { title: 'Revenue (page)', value: `$${(totalRevenue / 100).toLocaleString()}`, icon: RefreshCw },
+      { title: 'Revenue (page)', value: formatCAD(totalRevenue, { suffix: false }), icon: RefreshCw },
       { title: 'Pending (page)', value: pendingCount.toString().padStart(2, '0'), icon: Clock }
     ];
   }, [bookings, meta]);

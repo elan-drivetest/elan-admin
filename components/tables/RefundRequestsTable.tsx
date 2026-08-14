@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table';
 import { TableSkeleton } from '@/components/ui/loading-state';
 import type { RefundRequest, GetRefundRequestsParams, RefundStatus } from '@/types/refund';
+import { formatCAD } from '@/lib/utils';
 
 interface RefundRequestsTableProps {
   title: string;
@@ -70,9 +71,7 @@ export default function RefundRequestsTable({
     return <Badge className={`${config.bg} ${config.text}`}>{config.label}</Badge>;
   };
 
-  const formatCurrency = (amount: number) => {
-    return `$${(amount / 100).toFixed(2)}`;
-  };
+  const formatCurrency = (amount: number) => formatCAD(amount, { suffix: false });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {

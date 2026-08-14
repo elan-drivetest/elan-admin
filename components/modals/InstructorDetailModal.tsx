@@ -16,6 +16,7 @@ import { useInstructorById } from '@/hooks/useAdmin';
 import type { AdminInstructorDetail } from '@/types/admin';
 import Image from 'next/image';
 import FilePreviewerModal from './FilePreviewerModal';
+import { formatCAD } from '@/lib/utils';
 
 interface InstructorDetailModalProps {
   isOpen: boolean;
@@ -31,7 +32,7 @@ export default function InstructorDetailModal({
   const { data: instructor, isLoading, error } = useInstructorById(instructorId);
   const [previewFile, setPreviewFile] = useState<{ url: string; title: string } | null>(null);
 
-  const formatPrice = (price: number) => `$${(price / 100).toFixed(2)} CAD`;
+  const formatPrice = (price: number) => formatCAD(price);
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',

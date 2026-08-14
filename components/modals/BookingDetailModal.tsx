@@ -33,7 +33,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUpdateTestResult } from '@/hooks/useAdmin';
-import { formatBookingStatus } from '@/lib/utils';
+import { formatBookingStatus, formatCAD } from '@/lib/utils';
+import { deriveBookingAdjustment } from '@/lib/utils/booking-calculations';
 import type { AdminBooking, TestResult } from '@/types/admin';
 import InstructorDetailModal from './InstructorDetailModal';
 import FilePreviewerModal from './FilePreviewerModal';
@@ -72,9 +73,7 @@ export default function BookingDetailModal({
 
   if (!booking) return null;
 
-  const formatPrice = (price: number) => {
-    return `$${(price / 100).toFixed(2)} CAD`;
-  };
+  const formatPrice = (price: number) => formatCAD(price);
 
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -146,14 +145,12 @@ export default function BookingDetailModal({
   const latitudeFormatted = formatCoordinate(booking.pickup_latitude);
   const longitudeFormatted = formatCoordinate(booking.pickup_longitude);
 
-  // Pricing: the API sometimes leaves discount_amount null even when a coupon
-  // was applied (the discount is baked into total_price). Derive it from the
-  // line items so the breakdown always reconciles to the total.
-  const subtotal = booking.base_price + booking.pickup_price + booking.addons_price;
-  const discountAmount =
-    booking.discount_amount && booking.discount_amount > 0
-      ? booking.discount_amount
-      : Math.max(0, subtotal - booking.total_price);
+  // `discount_amount` on a booking is ALWAYS null (the coupon discount lives in
+  // coupon_usages), and the components do not sum to total_price once a
+  // long-trip credit or a coupon applied. Derive the gap so the breakdown
+  // always reconciles. Note it may combine the credit AND a coupon, which is
+  // why it is labelled "Adjustments" rather than "Discount".
+  const { subtotal, adjustment: discountAmount } = deriveBookingAdjustment(booking);
   const hasDiscount = discountAmount > 0;
 
   return (
@@ -329,7 +326,7 @@ export default function BookingDetailModal({
                   {(hasDiscount || booking.coupon_code) && (
                     <div className="flex justify-between items-center text-red-600">
                       <span className="flex items-center gap-1.5">
-                        Discount
+                        Adjustments
                         {booking.coupon_code && (
                           <Badge variant="outline" className="border-green-300 bg-green-50 text-green-700 text-xs font-mono">
                             {booking.coupon_code}
