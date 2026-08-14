@@ -11,7 +11,9 @@ import { Label } from '@/components/ui/label';
 import FormErrorAlert from '@/components/ui/form-error-alert';
 import { Loader2, DollarSign, CheckCircle, XCircle } from 'lucide-react';
 import { useUpdateRefund } from '@/hooks/useRefunds';
-import { getApiErrorMessages } from '@/lib/utils';
+import { getApiErrorMessages, formatCAD } from '@/lib/utils';
+import { previewRefund } from '@/lib/utils/refund-calculations';
+import RefundPolicyNote from '@/components/refunds/RefundPolicyNote';
 import { RefundRequest, RefundStatus } from '@/types/refund';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -55,9 +57,12 @@ export default function ProcessRefundForm({ refund, onSuccess, onCancel }: Proce
   const selectedStatus = watch('status');
   const refundPercentage = watch('refund_percentage');
 
-  const formatCurrency = (amount: number) => `$${(amount / 100).toFixed(2)}`;
+  const formatCurrency = (amount: number) => formatCAD(amount, { suffix: false });
 
-  const calculatedRefundAmount = (refund.amount * refundPercentage) / 100;
+  // `refund.amount` is already floor(booking_total * refund_percentage / 100).
+  // Re-applying the percentage here halved every partial refund; previewRefund
+  // reconstructs the booking total and re-floors exactly like the server does.
+  const preview = previewRefund(refund, refundPercentage);
 
   const onSubmit: SubmitHandler<ProcessRefundFormData> = async (data) => {
     try {
@@ -98,15 +103,33 @@ export default function ProcessRefundForm({ refund, onSuccess, onCancel }: Proce
             <span className="text-sm font-medium">#{refund.booking_id}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Original Amount:</span>
+            <span className="text-sm text-gray-600">Booking total:</span>
+            <span className="text-sm font-medium">
+              {formatCurrency(preview.bookingTotal)}
+              {!preview.exact && <span className="text-gray-400"> (approx.)</span>}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">
+              Requested refund ({refund.refund_percentage}%):
+            </span>
             <span className="text-sm font-medium">{formatCurrency(refund.amount)}</span>
           </div>
           <div className="flex justify-between items-center pt-2 border-t">
-            <span className="text-sm font-semibold">Refund Amount:</span>
+            <span className="text-sm font-semibold">
+              Refund at {refundPercentage}%:
+            </span>
             <span className="text-lg font-bold text-green-600">
-              {formatCurrency(calculatedRefundAmount)}
+              {formatCurrency(preview.amount)}
             </span>
           </div>
+          {!preview.exact && (
+            <p className="text-xs text-gray-500">
+              The booking total is not included in the refund payload, so this
+              override is estimated to within a cent. The server recomputes the
+              exact amount from the booking when you approve.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -166,8 +189,13 @@ export default function ProcessRefundForm({ refund, onSuccess, onCancel }: Proce
             />
           </div>
           <div className="text-sm text-gray-600">
-            Refund Amount: <span className="font-medium text-green-600">{formatCurrency(calculatedRefundAmount)}</span>
+            Refund Amount: <span className="font-medium text-green-600">{formatCurrency(preview.amount)}</span>
           </div>
+          <RefundPolicyNote
+            testDate={refund.booking_test_date}
+            requestDate={refund.request_date}
+            storedPercentage={refund.refund_percentage}
+          />
           {errors.refund_percentage && (
             <p className="text-sm text-red-600">{errors.refund_percentage.message}</p>
           )}

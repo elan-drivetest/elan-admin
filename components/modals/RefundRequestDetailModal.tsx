@@ -14,6 +14,9 @@ import {
   XCircle, Loader2
 } from 'lucide-react';
 import { useRefundDetail, useUpdateRefund } from '@/hooks/useRefunds';
+import { formatCAD } from '@/lib/utils';
+import { previewRefund } from '@/lib/utils/refund-calculations';
+import RefundPolicyNote from '@/components/refunds/RefundPolicyNote';
 import FormErrorAlert from '@/components/ui/form-error-alert';
 import type { RefundStatus } from '@/types/refund';
 import CustomerDetailModal from './CustomerDetailModal';
@@ -63,7 +66,7 @@ export default function RefundRequestDetailModal({
   const isPending = refund?.status === 'pending';
   const isDeciding = decision !== 'none';
 
-  const formatCurrency = (amount: number) => `$${(amount / 100).toFixed(2)}`;
+  const formatCurrency = (amount: number) => formatCAD(amount, { suffix: false });
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
@@ -117,7 +120,12 @@ export default function RefundRequestDetailModal({
     }
   };
 
-  const calculatedRefundAmount = refund ? (refund.amount * editPercentage) / 100 : 0;
+  // `refund.amount` is ALREADY floor(booking_total * refund_percentage / 100).
+  // The old expression multiplied by the percentage a second time, so a 50%
+  // request displayed half of the real refund. previewRefund re-derives the
+  // booking total and applies the server's floor exactly once.
+  const preview = refund ? previewRefund(refund, editPercentage) : null;
+  const calculatedRefundAmount = preview?.amount ?? 0;
 
   if (!isOpen) return null;
 
@@ -204,7 +212,8 @@ export default function RefundRequestDetailModal({
                     </div>
                     <p className="text-xs text-gray-600 mb-4">
                       {refund.customer_name || 'The customer'} requested a {refund.refund_percentage}% refund
-                      (<span className="font-medium">{formatCurrency((refund.amount * refund.refund_percentage) / 100)}</span> of {formatCurrency(refund.amount)}).
+                      (<span className="font-medium">{formatCurrency(refund.amount)}</span>
+                      {preview ? <> of a {formatCurrency(preview.bookingTotal)} booking</> : null}).
                       Approve to issue the refund, or reject the request.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-3">
@@ -248,10 +257,18 @@ export default function RefundRequestDetailModal({
                 {/* Amounts row */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <div className="text-xs font-medium text-gray-500 mb-1">Original Amount</div>
+                    <div className="text-xs font-medium text-gray-500 mb-1">
+                      Requested Refund
+                    </div>
                     <div className="text-2xl font-bold text-gray-900">
                       {formatCurrency(refund.amount)}
                     </div>
+                    {preview && (
+                      <div className="text-[11px] text-gray-500 mt-0.5">
+                        {refund.refund_percentage}% of {formatCurrency(preview.bookingTotal)}
+                        {!preview.exact && ' (approx.)'}
+                      </div>
+                    )}
                   </div>
                   {decision === 'reject' ? (
                     <div className="p-3 rounded-lg bg-red-50 border-2 border-red-200">
@@ -265,8 +282,17 @@ export default function RefundRequestDetailModal({
                         {decision === 'approve' ? 'Refund to issue' : 'Refund Amount'}
                       </div>
                       <div className="text-2xl font-bold text-green-600">
-                        {formatCurrency(decision === 'approve' ? calculatedRefundAmount : (refund.amount * refund.refund_percentage) / 100)}
+                        {formatCurrency(decision === 'approve' ? calculatedRefundAmount : refund.amount)}
                       </div>
+                      {decision === 'approve' &&
+                        preview &&
+                        !preview.exact &&
+                        editPercentage !== refund.refund_percentage && (
+                          <div className="text-[11px] text-gray-500 mt-1">
+                            Estimated to within a cent — the refund payload omits the
+                            booking total. The server recomputes it exactly.
+                          </div>
+                        )}
                     </div>
                   )}
                 </div>
@@ -308,6 +334,11 @@ export default function RefundRequestDetailModal({
                       />
                     </div>
                   )}
+                  <RefundPolicyNote
+                    testDate={refund.booking_test_date}
+                    requestDate={refund.request_date}
+                    storedPercentage={refund.refund_percentage}
+                  />
                 </div>
 
                 {/* Reference fields */}

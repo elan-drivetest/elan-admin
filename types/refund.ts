@@ -9,8 +9,21 @@ export interface RefundRequest {
   customer_phone_number?: string; // Optional - list endpoint may not return this
   customer_address?: string; // Optional - list endpoint may not return this
   payment_transaction_id?: number; // Optional - list endpoint may not return this
+  /**
+   * The refund amount in cents — ALREADY `floor(booking.total_price * refund_percentage / 100)`.
+   * Never multiply this by the percentage again.
+   */
   amount: number;
   refund_percentage: number;
+  /**
+   * The booking's `total_price`. NOT currently returned by the API — the admin
+   * refund query selects only `booking_test_date`. Declared so that the moment
+   * the backend adds it, `deriveBookingTotal()` uses it instead of working
+   * backwards from `amount`. See lib/utils/refund-calculations.ts.
+   */
+  booking_total_price?: number;
+  /** The booking's 	est_date, aliased by the admin refund query. */
+  booking_test_date?: string;
   request_date: string;
   status: RefundStatus;
   processed_at: string | null;
