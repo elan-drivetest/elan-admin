@@ -21,6 +21,7 @@ import FormErrorAlert from '@/components/ui/form-error-alert';
 import { Loader2, Gift, ArrowLeft, DollarSign, Percent, Calendar } from 'lucide-react';
 import { adminService } from '@/services/admin';
 import { getApiErrorMessages } from '@/lib/utils';
+import type { CreateCouponRequest } from '@/types/admin';
 
 const createCouponSchema = z.object({
   name: z.string().min(1, 'Coupon name is required').min(2, 'Name must be at least 2 characters'),
@@ -32,14 +33,40 @@ const createCouponSchema = z.object({
   is_recurrent: z.boolean(),
   is_failure_coupon: z.boolean(),
   min_purchase_amount: z.number().min(0, 'Minimum purchase amount must be positive'),
-  start_date: z.string().min(1, 'Start date is required'),
+  /**
+   * Activation is a two-state choice, not a date the admin has to reason about.
+   *
+   * 'now' sends `activate_now: true` and no `start_date` at all. The server
+   * rejects any past `start_date`, and a picker's "today" is midnight — which
+   * for a bare date is midnight UTC, i.e. 8pm yesterday in Toronto. Every such
+   * value is in the past, so the earliest start an admin could previously get
+   * accepted was tomorrow and coupons took 24 hours to go live.
+   */
+  activation: z.enum(['now', 'scheduled']),
+  start_date: z.string(),
   // Optional — a blank expiry means the coupon never expires.
   expires_at: z.string().optional(),
-}).refine((data) => {
+}).refine(
+  (data) => data.activation === 'now' || data.start_date.trim() !== '',
+  { message: 'Pick the date and time this coupon should start.', path: ['start_date'] },
+).refine(
+  // Mirrors the server: a scheduled start must be in the future. "Now" is the
+  // other branch, not a date you can type.
+  (data) =>
+    data.activation === 'now' ||
+    !data.start_date ||
+    new Date(data.start_date).getTime() > Date.now(),
+  {
+    message: 'That start time has already passed. Choose "Start immediately" or a future time.',
+    path: ['start_date'],
+  },
+).refine((data) => {
   if (!data.expires_at) return true; // no expiry is allowed
-  return new Date(data.expires_at) > new Date(data.start_date);
+  // Against the real start: for an immediate coupon that is now, not a field.
+  const start = data.activation === 'now' ? new Date() : new Date(data.start_date);
+  return new Date(data.expires_at) > start;
 }, {
-  message: "Expiration date must be after start date",
+  message: "Expiration date must be after the start",
   path: ["expires_at"],
 }).refine(
   (data) => data.discount_type !== 'percentage' || data.discount <= 100,
@@ -79,11 +106,16 @@ export default function CreateCouponForm({ onSuccess, onCancel }: CreateCouponFo
       is_recurrent: false,
       is_failure_coupon: false,
       min_purchase_amount: 0,
+      // Immediate is the default: it is what an admin creating a promo almost
+      // always wants, and the only start that is live the moment they save.
+      activation: 'now',
       start_date: '',
       expires_at: '',
     },
   });
 
+  const activation = watch('activation');
+  const isScheduled = activation === 'scheduled';
   const isRecurrent = watch('is_recurrent');
   const isFailureCoupon = watch('is_failure_coupon');
   const discountType = watch('discount_type');
@@ -102,9 +134,15 @@ export default function CreateCouponForm({ onSuccess, onCancel }: CreateCouponFo
       setIsLoading(true);
       setErrorMessages([]);
 
-      const couponData = {
-        ...data,
-        start_date: new Date(data.start_date).toISOString(),
+      const { activation: _activation, start_date, ...rest } = data;
+
+      // `activate_now` wins over `start_date` server-side, but send only one so
+      // the request says plainly which branch was chosen.
+      const couponData: CreateCouponRequest = {
+        ...rest,
+        ...(isScheduled
+          ? { start_date: new Date(start_date).toISOString() }
+          : { activate_now: true }),
         expires_at: data.expires_at ? new Date(data.expires_at).toISOString() : undefined,
       };
 
@@ -295,6 +333,48 @@ export default function CreateCouponForm({ onSuccess, onCancel }: CreateCouponFo
         </div>
       </div>
 
+      {/* Activation */}
+      <div className="space-y-3">
+        <Label className="text-sm font-medium text-gray-700">Activation</Label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {([
+            {
+              value: 'now' as const,
+              title: 'Start immediately',
+              detail: 'Customers can use the code as soon as you save.',
+            },
+            {
+              value: 'scheduled' as const,
+              title: 'Schedule for later',
+              detail: 'Pick the exact date and time it goes live.',
+            },
+          ]).map((option) => (
+            <label
+              key={option.value}
+              className={`flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors ${
+                activation === option.value
+                  ? 'border-primary bg-primary/5'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <input
+                type="radio"
+                name="activation"
+                value={option.value}
+                checked={activation === option.value}
+                onChange={() => setValue('activation', option.value)}
+                disabled={isLoading}
+                className="mt-0.5 h-4 w-4 accent-primary"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-900">{option.title}</span>
+                <span className="block text-xs text-gray-500">{option.detail}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
       {/* Date Range */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
@@ -308,11 +388,17 @@ export default function CreateCouponForm({ onSuccess, onCancel }: CreateCouponFo
               type="datetime-local"
               {...register('start_date')}
               className={`pl-10 ${errors.start_date ? 'border-red-500' : ''}`}
-              disabled={isLoading}
+              disabled={isLoading || !isScheduled}
             />
           </div>
-          {errors.start_date && (
-            <p className="text-sm text-red-600">{errors.start_date.message}</p>
+          {isScheduled ? (
+            errors.start_date && (
+              <p className="text-sm text-red-600">{errors.start_date.message}</p>
+            )
+          ) : (
+            <p className="text-xs text-gray-500">
+              Not needed — the coupon starts the moment you save it.
+            </p>
           )}
         </div>
 
@@ -346,8 +432,13 @@ export default function CreateCouponForm({ onSuccess, onCancel }: CreateCouponFo
               onCheckedChange={(checked) => setValue('is_recurrent', !!checked)}
               disabled={isLoading}
             />
-            <span className="text-sm text-gray-700">Recurring Coupon</span>
-            <span className="text-xs text-gray-500">(Can be used multiple times by the same customer)</span>
+            <span className="text-sm text-gray-700">Reusable</span>
+            {/* Off is once IN TOTAL, across all customers — not once each. An
+                easy thing to misread when creating a promo. */}
+            <span className="text-xs text-gray-500">
+              (Off = the code can be redeemed <strong>once in total</strong>, by whoever uses it
+              first — not once per customer)
+            </span>
           </label>
           
           <label className="flex items-center gap-2">

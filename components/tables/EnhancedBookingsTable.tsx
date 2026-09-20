@@ -19,6 +19,7 @@ import BookingDetailModal from '@/components/modals/BookingDetailModal';
 import FilePreviewerModal from '@/components/modals/FilePreviewerModal';
 import { formatBookingStatus, formatCAD } from '@/lib/utils';
 import { deriveBookingAdjustment } from '@/lib/utils/booking-calculations';
+import { formatDrivingTime, readPayBreakdown } from '@/lib/utils/instructor-pay';
 import type { AdminBooking } from '@/types/admin';
 
 export interface EnhancedBookingData {
@@ -42,7 +43,8 @@ export interface EnhancedBookingData {
   roadTestDocUrl?: string;
   g1LicenseDocUrl?: string;
   couponCode?: string;
-  discountAmount?: number;
+  /** Cents saved by a coupon. `null`/absent = unknown (pre-2026-09-19 booking). */
+  discountAmount?: number | null;
   originalBooking: AdminBooking; // Add this to pass full booking data
 }
 
@@ -156,7 +158,7 @@ export default function EnhancedBookingsTable({
                   <TableHead>Test Type</TableHead>
                   <TableHead>Total Price</TableHead>
                   <TableHead>Instructor</TableHead>
-                  <TableHead>Instructor Fee</TableHead>
+                  <TableHead>Instructor Pay</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Documents</TableHead>
                   <TableHead></TableHead>
@@ -270,9 +272,30 @@ export default function EnhancedBookingsTable({
                       </TableCell>
                       <TableCell>
                         {booking.originalBooking.ride_price != null ? (
-                          <span className="text-green-600 font-medium text-sm">
-                            {formatPrice(booking.originalBooking.ride_price)}
-                          </span>
+                          (() => {
+                            // `ride_price` is the exact payout, not an estimate:
+                            // base (rate x 3) + driving. Show what it is made of —
+                            // the base is most of the money.
+                            const pay = readPayBreakdown(
+                              booking.originalBooking,
+                              booking.originalBooking.ride_price,
+                            );
+                            return (
+                              <div className="text-sm">
+                                <span className="font-medium text-green-600">
+                                  {formatPrice(booking.originalBooking.ride_price!)}
+                                </span>
+                                {pay && (
+                                  <p className="mt-0.5 text-xs text-gray-500">
+                                    {formatPrice(pay.baseAmount)} test
+                                    {pay.hasTransportation
+                                      ? ` + ${formatPrice(pay.transportationAmount)} driving (${formatDrivingTime(pay.transportationHours)})`
+                                      : ' · no driving'}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()
                         ) : (
                           <span className="text-gray-400 text-sm" title="Not provided by the API yet">—</span>
                         )}

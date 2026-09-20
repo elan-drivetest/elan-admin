@@ -1,4 +1,5 @@
 // lib/pricing-config.ts
+import { instructorBaseAmount } from '@/lib/settings-copy';
 import type { SystemSetting } from '@/types/admin';
 
 /**
@@ -104,6 +105,59 @@ export function resolvePickupPricing(
  */
 export function isPricingCriticalSetting(key: string): key is PickupPricingKey {
   return (PICKUP_PRICING_KEYS as string[]).includes(key);
+}
+
+// ---------------------------------------------------------------------------
+// Instructor pay — what a ride costs Elan
+// ---------------------------------------------------------------------------
+
+/**
+ * `instructor_rate` is the whole of instructor pay since 2026-09-19: every ride
+ * pays `instructor_rate × INSTRUCTOR_BASE_HOURS` for the road test, plus the
+ * rate per hour of driving the customer (BUSINESS_LOGIC.md §6).
+ *
+ * This resolves the cost floor only — what Elan owes before a single kilometre
+ * is driven — so a screen can compare it against what the customer is charged.
+ * It is NOT a payout calculator: an actual payout is frozen onto the ride at
+ * accept and always read from the server.
+ *
+ * The server refuses a zero or negative rate and falls back to 4000
+ * (`getInstructorRate()`), so this mirrors that judgement.
+ */
+export const INSTRUCTOR_PAY_FALLBACKS = {
+  instructor_rate: 4000,
+} as const;
+
+export interface InstructorPayFloor {
+  /** Cents per hour of driving the customer. */
+  rateCents: number;
+  /** Cents paid for the road test on every ride, driving or not. */
+  baseAmountCents: number;
+  /** True when `instructor_rate` could not be read and the fallback is in use. */
+  fellBack: boolean;
+}
+
+export function resolveInstructorPayFloor(
+  settings: SystemSetting[] | null | undefined,
+): InstructorPayFloor {
+  const fallback = INSTRUCTOR_PAY_FALLBACKS.instructor_rate;
+  const setting = settings?.find((s) => s.key === 'instructor_rate');
+  const parsed = setting ? Number(setting.value) : Number.NaN;
+  const usable = Number.isFinite(parsed) && parsed > 0;
+
+  if (!usable && setting) {
+    console.warn(
+      `Setting 'instructor_rate' is not a valid positive number (got '${setting.value}') — using fallback ${fallback}`,
+    );
+  }
+
+  const rateCents = usable ? parsed : fallback;
+
+  return {
+    rateCents,
+    baseAmountCents: instructorBaseAmount(rateCents),
+    fellBack: !usable,
+  };
 }
 
 // ---------------------------------------------------------------------------

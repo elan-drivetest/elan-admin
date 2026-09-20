@@ -118,7 +118,17 @@ export interface AdminInstructorDetail {
     end_time: string;
     status: string;
     total_distance: string;
+    /** Wall-clock Start→Stop. Reporting only — it no longer sets pay. */
     total_hours: string;
+    /**
+     * The frozen pay breakdown (BUSINESS_LOGIC.md §6). Optional because rides
+     * accepted before 2026-09-19 have `base_amount` 0 and settle on the old
+     * wall-clock arithmetic — guard the breakdown on `base_amount > 0`.
+     */
+    base_amount?: number | null;
+    transportation_hours?: string | null;
+    transportation_amount?: number | null;
+    /** Cents per TRANSPORTATION hour — not per hour of the appointment. */
     hourly_rate: number;
     instructor_earnings: number;
     pickup_location: string;
@@ -228,7 +238,13 @@ export interface InstructorRecentRide {
   end_time: string;
   status: string;
   total_distance: string;
+  /** Wall-clock Start→Stop. Reporting only — it no longer sets pay. */
   total_hours: string;
+  /** Frozen pay breakdown; absent/zero on rides accepted before 2026-09-19. */
+  base_amount?: number | null;
+  transportation_hours?: string | null;
+  transportation_amount?: number | null;
+  /** Cents per TRANSPORTATION hour — not per hour of the appointment. */
   hourly_rate: number;
   instructor_earnings: number;
   pickup_location: string;
@@ -274,7 +290,17 @@ export interface AdminBooking {
   status: string;
   test_result?: string;
   coupon_code?: string;
-  discount_amount?: number;
+  /**
+   * Cents saved by the coupon, written since 2026-09-19 on both booking paths.
+   *
+   * `null` = no coupon on this booking; `0` = a coupon applied but was worth
+   * nothing here; `> 0` = cents saved. Null and zero are distinct on purpose.
+   * Bookings created BEFORE that deploy are all null — treat null as *unknown*,
+   * not zero, on older records. It is NOT the same as
+   * `base_price + pickup_price + addons_price - total_price`, which also
+   * absorbs the long-trip add-on concession.
+   */
+  discount_amount?: number | null;
   is_rescheduled: boolean;
   previous_booking_id?: number;
   timezone: string;
@@ -283,8 +309,19 @@ export interface AdminBooking {
   road_test_doc_url?: string;
   g1_license_doc_url?: string;
   payment_url?: string;
-  // Real instructor economics (exposed to the admin group; may be absent on older API builds).
-  ride_price?: number; // Amount in cents
+  // Real instructor economics, exposed to the admin group (BUSINESS_LOGIC.md §14).
+  // Since 2026-09-19 `ride_price` is the EXACT payout, not an estimate:
+  //   ride_price = base_amount + transportation_amount
+  //   base_amount = hourly_rate x 3   (the road test, on every ride)
+  //   transportation_amount = round(transportation_hours x hourly_rate)
+  // Never recompute these — an accepted ride keeps the rate it was accepted at.
+  ride_price?: number; // cents
+  base_amount?: number; // cents
+  transportation_hours?: number; // hours of driving the customer; 0 at a meet-at-centre
+  transportation_amount?: number; // cents
+  hourly_rate?: number; // cents per transportation hour
+  pickup_duration?: number | null; // ONE-WAY driving seconds, from Google at booking time
+  /** @deprecated mirrors transportation_hours; wall-clock hours no longer set pay. */
   total_ride_hour?: number | string;
   created_at: string;
   updated_at: string;
@@ -357,7 +394,17 @@ export interface CreateBookingResponse {
   status: string;
   test_result?: string;
   coupon_code?: string;
-  discount_amount?: number;
+  /**
+   * Cents saved by the coupon, written since 2026-09-19 on both booking paths.
+   *
+   * `null` = no coupon on this booking; `0` = a coupon applied but was worth
+   * nothing here; `> 0` = cents saved. Null and zero are distinct on purpose.
+   * Bookings created BEFORE that deploy are all null — treat null as *unknown*,
+   * not zero, on older records. It is NOT the same as
+   * `base_price + pickup_price + addons_price - total_price`, which also
+   * absorbs the long-trip add-on concession.
+   */
+  discount_amount?: number | null;
   is_rescheduled: boolean;
   previous_booking_id?: number;
   timezone: string;
@@ -601,7 +648,18 @@ export interface CreateCouponRequest {
   is_recurrent: boolean;
   is_failure_coupon: boolean;
   min_purchase_amount: number;
-  start_date: string;
+  /**
+   * Start the coupon on the server's clock, ignoring `start_date` entirely.
+   *
+   * Exists because a date picker's "today" is midnight — and a bare
+   * `YYYY-MM-DD` is midnight UTC, which in Toronto is 8pm yesterday. Both are
+   * always behind the server's clock and were rejected, so the earliest start
+   * an admin could get accepted was tomorrow and every coupon took 24 hours to
+   * go live. Send this instead of trying to express "now" as a date.
+   */
+  activate_now?: boolean;
+  /** Omit (or send `activate_now`) to start immediately; otherwise must be FUTURE. */
+  start_date?: string;
   expires_at?: string; // optional — omit for a never-expiring coupon
 }
 
@@ -614,8 +672,16 @@ export interface UpdateCouponRequest {
   is_recurrent?: boolean;
   is_failure_coupon?: boolean;
   min_purchase_amount?: number;
+  /** `{ activate_now: true }` alone is a valid body — it starts the coupon now. */
+  activate_now?: boolean;
   start_date?: string;
-  expires_at?: string;
+  /**
+   * Absent and explicitly-null are DIFFERENT since the partial-update fix:
+   * omitting the key leaves the stored expiry alone, `null` clears it to
+   * "never expires". Sending `undefined` to clear an expiry silently does
+   * nothing at all.
+   */
+  expires_at?: string | null;
 }
 
 export type AdminCouponsResponse = AdminCoupon[];
@@ -680,6 +746,17 @@ export interface AddressSearchResponse {
 // Coupon Verification types
 export interface CouponVerificationRequest {
   code: string;
+  /**
+   * `base_price + pickup_price + addons_price`, in cents. When supplied, the
+   * response carries a computed `discount_amount` / `total_after_discount` /
+   * `meets_minimum`.
+   *
+   * Unused by this app: `POST /v1/coupons/verify` is still CustomerGuard-only
+   * and 401s for an admin session, so the panel goes through
+   * `adminService.verifyCouponForAdmin()` instead. Declared so the shape is not
+   * re-invented if that guard ever widens.
+   */
+  subtotal?: number;
 }
 
 export interface CouponVerificationResponse {

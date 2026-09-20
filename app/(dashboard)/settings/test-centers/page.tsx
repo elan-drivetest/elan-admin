@@ -32,6 +32,7 @@ import {
   Map,
   CheckCircle,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   Table,
@@ -42,6 +43,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useTestCenters, useUpdateTestCenter } from '@/hooks/useAdmin';
+import { usePricingConfig } from '@/hooks/usePricingConfig';
+import { resolveInstructorPayFloor } from '@/lib/pricing-config';
 import { TableSkeleton } from '@/components/ui/loading-state';
 import { getApiErrorMessages, formatCAD } from '@/lib/utils';
 import { resolveTestCenterStatus } from '@/lib/utils/test-center-status';
@@ -88,6 +91,22 @@ export default function TestCentersPage() {
 
   const { data: testCenters, isLoading, error, refetch } = useTestCenters();
   const { updateTestCenter, isLoading: isUpdating } = useUpdateTestCenter();
+
+  /**
+   * What Elan owes an instructor before a single kilometre is driven.
+   *
+   * Since the 2026-09-19 pay rework every ride pays `instructor_rate × 3` for the
+   * road test, meet-at-centre included. A centre whose `base_price` is below that
+   * therefore sells its cheapest booking shape at a loss — the binding constraint
+   * named in ADMIN_SETTINGS.md §4.5 — and this screen is the only place it can be
+   * fixed. Driving is paid on top and the pickup fare covers that separately.
+   */
+  const { settings } = usePricingConfig();
+  const payFloor = useMemo(() => resolveInstructorPayFloor(settings), [settings]);
+  const belowFloor = useMemo(
+    () => testCenters.filter((c) => c.base_price < payFloor.baseAmountCents),
+    [testCenters, payFloor.baseAmountCents],
+  );
 
   const getStatus = (center: TestCenter): string => resolveTestCenterStatus(center, statusById);
   const isActive = (center: TestCenter) => getStatus(center) === 'ACTIVE';
@@ -179,6 +198,30 @@ export default function TestCentersPage() {
 
   return (
     <div className="px-6 space-y-6">
+      {/* The pay floor, and which centres sit under it */}
+      {belowFloor.length > 0 && (
+        <div className="flex gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="text-sm leading-relaxed">
+            <p className="font-medium">
+              {belowFloor.length === 1
+                ? '1 test centre charges less than an instructor is paid'
+                : `${belowFloor.length} test centres charge less than an instructor is paid`}
+            </p>
+            <p className="mt-1">
+              Every ride pays the instructor {formatPrice(payFloor.baseAmountCents)} for the road
+              test alone, driving on top. A base price under that loses money on a meet-at-centre
+              booking before anyone drives anywhere:{' '}
+              {belowFloor
+                .slice(0, 4)
+                .map((c) => `${c.name} (${formatPrice(c.base_price)})`)
+                .join(', ')}
+              {belowFloor.length > 4 ? ` and ${belowFloor.length - 4} more` : ''}.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Search */}
       <Card>
         <CardContent className="pt-6">
@@ -282,9 +325,20 @@ export default function TestCentersPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="font-semibold text-green-700">
+                      <span
+                        className={`font-semibold ${
+                          center.base_price < payFloor.baseAmountCents
+                            ? 'text-amber-700'
+                            : 'text-green-700'
+                        }`}
+                      >
                         {formatPrice(center.base_price)}
                       </span>
+                      {center.base_price < payFloor.baseAmountCents && (
+                        <p className="text-xs text-amber-700">
+                          under the {formatPrice(payFloor.baseAmountCents)} paid out
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell>
                       {/* Stop propagation so toggling doesn't open the edit modal */}
@@ -485,6 +539,10 @@ export default function TestCentersPage() {
               </div>
               <p className="text-xs text-gray-500">
                 Original: {selectedCenter ? formatPrice(selectedCenter.base_price) : '-'}
+              </p>
+              <p className="text-xs text-gray-500">
+                An instructor is paid {formatPrice(payFloor.baseAmountCents)} for the road test on
+                every ride here, driving on top. Below that, a meet-at-centre booking loses money.
               </p>
             </div>
           </div>

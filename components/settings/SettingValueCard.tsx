@@ -20,6 +20,7 @@ import { getApiErrorMessages } from '@/lib/utils';
 import { invalidatePricingConfig } from '@/hooks/usePricingConfig';
 import {
   formatSettingValue,
+  getEditorHint,
   getSettingCopy,
   getSettingEditorSpec,
   getSettingUnit,
@@ -62,6 +63,7 @@ export default function SettingValueCard({
   const siblingError = parsed.ok && !isUnchanged ? validate?.(parsed.numericValue) ?? null : null;
   const impact = parsed.ok && !isUnchanged ? describeImpact?.(parsed.numericValue) : null;
   const canSave = parsed.ok && !isUnchanged && !siblingError;
+  const editorHint = parsed.ok ? getEditorHint(setting.key, parsed.numericValue) : null;
 
   /** §4.4: the high and medium keys are confirmed before they are written. */
   const needsConfirmation = copy?.risk === 'high' || copy?.risk === 'medium';
@@ -164,6 +166,13 @@ export default function SettingValueCard({
               </p>
             )}
 
+            {/* The ×3 road-test multiplier is invisible in the raw rate */}
+            {parsed.ok && editorHint && (
+              <p className="rounded-md bg-primary/5 px-2 py-1.5 text-xs leading-relaxed text-primary">
+                {editorHint}
+              </p>
+            )}
+
             {parsed.ok && !isUnchanged && !siblingError && (
               <div className="space-y-1 text-xs text-gray-600">
                 <div className="flex items-center gap-2">
@@ -259,6 +268,7 @@ export default function SettingValueCard({
               </p>
             )}
 
+            {editorHint && <p className="text-sm text-gray-600">{editorHint}</p>}
             {impact && <p className="text-sm text-gray-600">{impact}</p>}
           </div>
 

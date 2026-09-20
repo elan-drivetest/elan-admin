@@ -313,10 +313,16 @@ export default function PricingBreakdownAdmin({
       ? [
           {
             key: 'tier1',
-            label: `First ${fare.baseKm} km of the drive`,
+            label: fare.billedRoundTrip
+              ? `${fare.baseKm} km each way`
+              : `First ${fare.baseKm} km of the drive`,
             amount: tier1,
             colour: 'bg-primary',
-            source: `Base Rate ${formatPrice(pricing.baseRate)}/km × Included distance`,
+            // Inside the included distance the customer pays for the return leg
+            // too — the instructor drives them to the centre and home.
+            source: fare.billedRoundTrip
+              ? `${formatPrice(pricing.baseRate)}/km, charged both ways`
+              : `Base Rate ${formatPrice(pricing.baseRate)}/km × Included distance`,
           },
         ]
       : []),

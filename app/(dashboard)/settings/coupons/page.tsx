@@ -8,10 +8,11 @@ import CouponsTable from '@/components/tables/CouponsTable';
 import LoadingState, { CardSkeleton } from '@/components/ui/loading-state';
 import ErrorBoundary from '@/components/ui/error-boundary';
 import { Button } from '@/components/ui/button';
-import { Gift, Users, DollarSign, Calendar, Plus } from 'lucide-react';
+import { AlertTriangle, Gift, Users, DollarSign, Calendar, Plus } from 'lucide-react';
 import { useCoupons } from '@/hooks/useAdmin';
 import CursorPagination from '@/components/ui/CursorPagination';
 import { formatCAD, sumFixedCouponValue } from '@/lib/utils';
+import { looksFlattenedByPartialUpdate } from '@/lib/utils/coupon-audit';
 import type { AdminCouponsParams } from '@/types/admin';
 
 export default function CouponsPage() {
@@ -45,6 +46,16 @@ export default function CouponsPage() {
       },
     ];
   }, [coupons, meta]);
+
+  /**
+   * Coupons that a pre-2026-09-19 edit may have flattened from a percentage into
+   * a tiny fixed discount. Page-local — the check needs each row, so it can only
+   * see what is loaded. A hit means "open this and check", not "this is broken".
+   */
+  const suspect = React.useMemo(
+    () => coupons.filter(looksFlattenedByPartialUpdate),
+    [coupons],
+  );
 
   const handleSearchUpdate = (newParams: Partial<AdminCouponsParams>) => {
     const updatedParams = { ...searchParams, ...newParams, cursor: undefined, direction: undefined };
@@ -105,6 +116,28 @@ export default function CouponsPage() {
             </Link>
           </div>
         </div>
+
+        {suspect.length > 0 && (
+          <div className="flex gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="text-sm leading-relaxed">
+              <p className="font-medium">
+                {suspect.length === 1
+                  ? '1 coupon on this page may have been reset by an old edit'
+                  : `${suspect.length} coupons on this page may have been reset by an old edit`}
+              </p>
+              <p className="mt-1">
+                Editing a coupon used to overwrite its discount type, minimum, expiry and reuse
+                flag with defaults — turning <em>25% off</em> into <em>25 cents off</em>. The
+                backend no longer does this, but rows edited before the fix can still be wrong.
+                These read as a fixed discount under $1.00 with every other field at its default:{' '}
+                {suspect.slice(0, 5).map((c) => c.code).join(', ')}
+                {suspect.length > 5 ? ` and ${suspect.length - 5} more` : ''}. Open each and check
+                it against what it was meant to be.
+              </p>
+            </div>
+          </div>
+        )}
 
         <KeyMetrics metrics={metrics} />
 

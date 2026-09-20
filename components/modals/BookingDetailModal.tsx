@@ -34,6 +34,7 @@ import {
 import { toast } from 'sonner';
 import { useUpdateTestResult } from '@/hooks/useAdmin';
 import { formatBookingStatus, formatCAD } from '@/lib/utils';
+import { formatDrivingTime, readPayBreakdown } from '@/lib/utils/instructor-pay';
 import { deriveBookingAdjustment } from '@/lib/utils/booking-calculations';
 import type { AdminBooking, TestResult } from '@/types/admin';
 import InstructorDetailModal from './InstructorDetailModal';
@@ -145,13 +146,19 @@ export default function BookingDetailModal({
   const latitudeFormatted = formatCoordinate(booking.pickup_latitude);
   const longitudeFormatted = formatCoordinate(booking.pickup_longitude);
 
-  // `discount_amount` on a booking is ALWAYS null (the coupon discount lives in
-  // coupon_usages), and the components do not sum to total_price once a
-  // long-trip credit or a coupon applied. Derive the gap so the breakdown
-  // always reconciles. Note it may combine the credit AND a coupon, which is
-  // why it is labelled "Adjustments" rather than "Discount".
-  const { subtotal, adjustment: discountAmount } = deriveBookingAdjustment(booking);
+  // The components do not sum to total_price once a long-trip credit or a coupon
+  // applied. `bookings.discount_amount` is now written (since 2026-09-19), so
+  // the coupon's share is known and the remainder is the credit — show them
+  // apart. On older bookings that column is null, the split is unavailable, and
+  // the single combined line is still labelled "Adjustments" for that reason.
+  const {
+    subtotal,
+    adjustment: discountAmount,
+    couponDiscount,
+    concession,
+  } = deriveBookingAdjustment(booking);
   const hasDiscount = discountAmount > 0;
+  const canSplit = couponDiscount !== null;
 
   return (
     <>
@@ -275,6 +282,48 @@ export default function BookingDetailModal({
                       <Phone className="w-3 h-3" />
                       <span>{booking.instructor_phone_number}</span>
                     </div>
+                    {/* What this job pays. `ride_price` is the exact payout, not
+                        an estimate — base (rate x 3) + driving, frozen when the
+                        instructor accepted. Never recomputed here. */}
+                    {booking.ride_price != null &&
+                      (() => {
+                        const pay = readPayBreakdown(booking, booking.ride_price!);
+                        return (
+                          <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                            <div className="flex items-center justify-between font-medium text-gray-900">
+                              <span>This job pays</span>
+                              <span className="tabular-nums">{formatCAD(booking.ride_price!)}</span>
+                            </div>
+                            {pay && (
+                              <>
+                                <div className="mt-1 flex items-center justify-between text-gray-600">
+                                  <span>Road test</span>
+                                  <span className="tabular-nums">{formatCAD(pay.baseAmount)}</span>
+                                </div>
+                                {pay.hasTransportation ? (
+                                  <div className="flex items-center justify-between text-gray-600">
+                                    <span>
+                                      Driving {formatDrivingTime(pay.transportationHours)}
+                                      <span className="text-gray-400">
+                                        {' '}
+                                        · {formatCAD(pay.hourlyRate)}/h
+                                      </span>
+                                    </span>
+                                    <span className="tabular-nums">
+                                      {formatCAD(pay.transportationAmount)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <p className="text-gray-400">
+                                    Met at the centre — no driving paid.
+                                  </p>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                     <Button
                       variant="outline"
                       size="sm"
@@ -323,20 +372,52 @@ export default function BookingDetailModal({
                     <span className="font-medium">{formatPrice(subtotal)}</span>
                   </div>
 
-                  {(hasDiscount || booking.coupon_code) && (
-                    <div className="flex justify-between items-center text-red-600">
-                      <span className="flex items-center gap-1.5">
-                        Adjustments
-                        {booking.coupon_code && (
-                          <Badge variant="outline" className="border-green-300 bg-green-50 text-green-700 text-xs font-mono">
-                            {booking.coupon_code}
-                          </Badge>
-                        )}
-                      </span>
-                      <span className="font-medium">
-                        {hasDiscount ? `- ${formatPrice(discountAmount)}` : '—'}
-                      </span>
-                    </div>
+                  {canSplit ? (
+                    <>
+                      {(couponDiscount > 0 || booking.coupon_code) && (
+                        <div className="flex justify-between items-center text-red-600">
+                          <span className="flex items-center gap-1.5">
+                            Coupon
+                            {booking.coupon_code && (
+                              <Badge variant="outline" className="border-green-300 bg-green-50 text-green-700 text-xs font-mono">
+                                {booking.coupon_code}
+                              </Badge>
+                            )}
+                          </span>
+                          <span className="font-medium">
+                            {couponDiscount > 0 ? `- ${formatPrice(couponDiscount)}` : '—'}
+                          </span>
+                        </div>
+                      )}
+                      {concession !== null && concession > 0 && (
+                        <div className="flex justify-between items-center text-red-600">
+                          <span>Long-trip lesson credit</span>
+                          <span className="font-medium">- {formatPrice(concession)}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    (hasDiscount || booking.coupon_code) && (
+                      <div className="flex justify-between items-center text-red-600">
+                        <span className="flex items-center gap-1.5">
+                          Adjustments
+                          {booking.coupon_code && (
+                            <Badge variant="outline" className="border-green-300 bg-green-50 text-green-700 text-xs font-mono">
+                              {booking.coupon_code}
+                            </Badge>
+                          )}
+                          <span
+                            className="text-xs font-normal text-gray-400"
+                            title="This booking predates the coupon/credit split, so the two cannot be separated."
+                          >
+                            coupon + credit
+                          </span>
+                        </span>
+                        <span className="font-medium">
+                          {hasDiscount ? `- ${formatPrice(discountAmount)}` : '—'}
+                        </span>
+                      </div>
+                    )
                   )}
 
                   <div className="flex justify-between items-center border-t pt-2 mt-1">

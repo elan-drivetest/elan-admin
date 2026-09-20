@@ -20,13 +20,22 @@ import {
 import { Loader2, Save, X, DollarSign, Percent, Calendar } from 'lucide-react';
 import { adminService } from '@/services/admin';
 import { getApiErrorMessages } from '@/lib/utils';
-import type { AdminCoupon } from '@/types/admin';
+import type { AdminCoupon, UpdateCouponRequest } from '@/types/admin';
 
-/** Safely convert an API date (possibly null/invalid) to a `datetime-local` value, or '' if absent. */
+/**
+ * An API date as a `datetime-local` value, in the admin's LOCAL time, or '' if absent.
+ *
+ * `toISOString().slice(0, 16)` looks right and is not: it yields UTC, which a
+ * `datetime-local` input then reads as local. Round-tripping through this form
+ * shifted every coupon's start and expiry by the timezone offset — four hours
+ * earlier in Toronto — on every single save.
+ */
 function toDatetimeLocal(value?: string | null): string {
   if (!value) return '';
   const d = new Date(value);
-  return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 16);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const editCouponSchema = z.object({
@@ -92,6 +101,17 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
     },
   });
 
+  /**
+   * A coupon whose start has not arrived yet can be brought forward with
+   * `activate_now` — the panel does not have to guess a timestamp that the
+   * server will accept as "now".
+   */
+  const startsInFuture = React.useMemo(() => {
+    const start = new Date(coupon.start_date);
+    return !isNaN(start.getTime()) && start.getTime() > Date.now();
+  }, [coupon.start_date]);
+  const [activateNow, setActivateNow] = React.useState(false);
+
   const isRecurrent = watch('is_recurrent');
   const isFailureCoupon = watch('is_failure_coupon');
   const discountType = watch('discount_type');
@@ -110,10 +130,17 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
       setIsLoading(true);
       setErrorMessages([]);
 
-      const updateData = {
+      const updateData: UpdateCouponRequest = {
         ...data,
-        start_date: new Date(data.start_date).toISOString(),
-        expires_at: data.expires_at ? new Date(data.expires_at).toISOString() : undefined,
+        // `activate_now` overrides start_date server-side; send it alone so the
+        // request reads as the choice that was made.
+        ...(activateNow
+          ? { activate_now: true, start_date: undefined }
+          : { start_date: new Date(data.start_date).toISOString() }),
+        // NULL, not undefined. Since the partial-update fix an omitted key is
+        // left alone, so sending `undefined` to clear an expiry silently keeps
+        // the old one. `null` is the value that means "never expires".
+        expires_at: data.expires_at ? new Date(data.expires_at).toISOString() : null,
       };
 
       await adminService.updateCoupon(coupon.id.toString(), updateData);
@@ -298,11 +325,30 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
               type="datetime-local"
               {...register('start_date')}
               className={`pl-10 ${errors.start_date ? 'border-red-500' : ''}`}
-              disabled={isLoading}
+              disabled={isLoading || activateNow}
             />
           </div>
-          {errors.start_date && (
+          {errors.start_date && !activateNow && (
             <p className="text-sm text-red-600">{errors.start_date.message}</p>
+          )}
+
+          {/* A scheduled coupon can be brought forward without inventing a
+              timestamp the server will accept as "now". */}
+          {startsInFuture && (
+            <label className="mt-1 flex items-start gap-2 rounded-md border border-primary/20 bg-primary/5 p-2.5">
+              <Checkbox
+                checked={activateNow}
+                onCheckedChange={(checked) => setActivateNow(!!checked)}
+                disabled={isLoading}
+                className="mt-0.5"
+              />
+              <span className="text-xs leading-relaxed text-gray-700">
+                <span className="font-medium text-gray-900">Start this coupon now</span>
+                <br />
+                It is scheduled for {new Date(coupon.start_date).toLocaleString()}. Tick this and
+                save to make it usable immediately.
+              </span>
+            </label>
           )}
         </div>
 
@@ -336,7 +382,11 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
               onCheckedChange={(checked) => setValue('is_recurrent', !!checked)}
               disabled={isLoading}
             />
-            <span className="text-sm text-gray-700">Recurring Coupon</span>
+            <span className="text-sm text-gray-700">Reusable</span>
+            {/* Off is once IN TOTAL, across all customers — not once each. */}
+            <span className="text-xs text-gray-500">
+              (Off = redeemable <strong>once in total</strong>, by whoever uses it first)
+            </span>
           </label>
           
           <label className="flex items-center gap-2">
@@ -357,7 +407,9 @@ export default function EditCouponForm({ coupon, onSuccess, onCancel }: EditCoup
       <div className="flex items-center gap-3 pt-4">
         <Button
           type="submit"
-          disabled={isLoading || !isDirty}
+          // `activateNow` lives outside the form, so it does not move isDirty —
+          // without it, ticking "Start this coupon now" alone leaves Save dead.
+          disabled={isLoading || (!isDirty && !activateNow)}
           className="bg-primary hover:bg-primary/90"
         >
           {isLoading ? (

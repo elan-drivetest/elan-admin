@@ -50,12 +50,14 @@ export default function DashboardAnalyticsMetrics({ analytics }: DashboardAnalyt
       link: '/refunds?status=pending',
     },
     {
-      // The backend computes AVG(ride_sessions.hourly_rate) over completed rides,
-      // so this is an average HOURLY RATE, not a per-session payout.
-      title: 'Avg Hourly Rate',
+      // AVG(ride_sessions.hourly_rate) over completed rides — an average RATE, not
+      // a per-session payout. Since 2026-09-19 that rate buys an hour of driving
+      // the customer; the road test is paid separately as three hours of it, so
+      // this number is not a ride's pay and must not be multiplied by anything.
+      title: 'Avg Driving Rate',
       value: `${formatCAD(analytics.average_salary_per_session)}/h`,
       icon: Calculator,
-      description: 'Average across completed rides',
+      description: 'Paid per driving hour, on top of each ride’s road-test base',
       link: null,
     },
     {

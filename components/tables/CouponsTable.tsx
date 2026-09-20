@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ChevronRight, Gift, Search, RefreshCw, Calendar, Users } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Gift, Search, RefreshCw, Calendar, Users } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -18,6 +18,10 @@ import {
 import { TableSkeleton } from '@/components/ui/loading-state';
 import CouponDetailModal from '@/components/modals/CouponDetailModal';
 import { formatCAD, formatCouponDiscount } from '@/lib/utils';
+import {
+  describeFlattenedSuspicion,
+  looksFlattenedByPartialUpdate,
+} from '@/lib/utils/coupon-audit';
 import type { AdminCoupon, AdminCouponsParams } from '@/types/admin';
 
 interface CouponsTableProps {
@@ -70,8 +74,14 @@ export default function CouponsTable({
 
   const getCouponTypeBadges = (coupon: AdminCoupon) => (
     <div className="flex gap-1">
-      {coupon.is_recurrent && (
-        <Badge variant="outline" className="text-xs">Recurring</Badge>
+      {coupon.is_recurrent ? (
+        <Badge variant="outline" className="text-xs">Reusable</Badge>
+      ) : (
+        // is_recurrent: false is once IN TOTAL across all customers, not once
+        // each — the surprising default, so say it rather than showing nothing.
+        <Badge variant="outline" className="text-xs" title="Redeemable once in total, by whoever uses it first">
+          Single use
+        </Badge>
       )}
       {coupon.is_failure_coupon && (
         <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700">Failure</Badge>
@@ -203,6 +213,17 @@ export default function CouponsTable({
                   <TableCell>
                     {/* `discount` is a percent for percentage/failure coupons. */}
                     <span className="font-medium text-green-600">{formatCouponDiscount(coupon)}</span>
+                    {/* A pre-fix partial update flattened percentage coupons into
+                        tiny fixed ones. Flag the shape so it can be checked. */}
+                    {looksFlattenedByPartialUpdate(coupon) && (
+                      <span
+                        className="mt-1 flex items-center gap-1 text-xs text-amber-700"
+                        title={describeFlattenedSuspicion(coupon)}
+                      >
+                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                        Check this
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <span className="text-sm">{formatCAD(coupon.min_purchase_amount)}</span>

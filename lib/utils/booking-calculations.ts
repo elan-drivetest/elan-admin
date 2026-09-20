@@ -152,8 +152,22 @@ export function describeMinimumNotice(rules: BookingRulesConfig): string {
 /**
  * Distance-based pickup fare, in cents.
  *
- * Charged at `baseRate` per km for the first `baseDistance` km, then at
- * `normalRate` per km beyond it. Port of `calculatePickupPrice()`.
+ * The two branches bill differently, and the difference is the whole point:
+ *
+ *   distance <= baseDistance:  distance × baseRate × 2       ← ROUND TRIP
+ *   distance >  baseDistance:  baseDistance × baseRate
+ *                              + (distance - baseDistance) × normalRate
+ *
+ * Inside the included distance the customer pays for the return leg too, because
+ * the instructor drives them to the centre and home again. Past it the fare
+ * tapers to roughly one way — a deliberate concession on long pickups, not a
+ * second rule. The fare therefore JUMPS DOWN as distance crosses `baseDistance`.
+ *
+ * The `× 2` was missing here, and from BUSINESS_LOGIC.md §16's reference helper,
+ * since the fare rule changed on 2026-08-15. It under-quoted every short pickup
+ * by half: a 12.4 km pickup previewed at $92.40 against a real charge of
+ * $104.80, so the admin saw one price and the customer was charged another.
+ * Port of `BookingsService.calculatePickupPrice()`.
  */
 export function calculatePickupPrice(
   distance: number,
@@ -168,7 +182,7 @@ export function calculatePickupPrice(
   const raw =
     distance > baseDistance
       ? baseDistance * baseRate + (distance - baseDistance) * normalRate
-      : distance * baseRate;
+      : distance * baseRate * 2;
 
   return Math.round(raw);
 }
@@ -186,6 +200,8 @@ export interface PickupFareTiers {
   total: number;
   /** True when the excess tier is in play. */
   crossesBaseDistance: boolean;
+  /** True when the base tier is billed both ways (inside the included distance). */
+  billedRoundTrip: boolean;
 }
 
 /**
@@ -208,11 +224,14 @@ export function describePickupFare(
 
   return {
     baseKm,
-    baseAmount: baseKm * baseRate,
+    // Round trip inside the included distance, one way past it — mirror
+    // `calculatePickupPrice` exactly or the tiers stop summing to the fare.
+    baseAmount: baseKm * baseRate * (crossesBaseDistance ? 1 : 2),
     excessKm,
     excessAmount: excessKm * normalRate,
     total: calculatePickupPrice(distance, pricing),
     crossesBaseDistance,
+    billedRoundTrip: !crossesBaseDistance && d > 0,
   };
 }
 
@@ -331,9 +350,16 @@ export function calculateCouponDiscount(price: number, coupon: CouponLike): numb
   const isPercentage =
     coupon.discount_type === 'percentage' || coupon.is_failure_coupon === true;
 
+  // Mirrors `calculateCouponDiscount` in the backend's
+  // `src/coupons/utils/coupon-discount.utils.ts`, which is now the single place
+  // that arithmetic lives — both the preview and booking creation call it, so a
+  // quoted saving and a charged saving cannot drift. A negative or non-numeric
+  // discount clamps to 0 there rather than paying the customer.
+  const discount = Math.max(0, Number(coupon.discount) || 0);
+
   return isPercentage
-    ? Math.round((price * Math.min(coupon.discount, 100)) / 100)
-    : Math.min(coupon.discount, price);
+    ? Math.round((price * Math.min(discount, 100)) / 100)
+    : Math.min(Math.round(discount), price);
 }
 
 /** True when the coupon's minimum-purchase gate would reject this order total. */
@@ -446,22 +472,62 @@ export function calculateBookingPrice(args: {
   };
 }
 
+export interface BookingAdjustment {
+  /** `base_price + pickup_price + addons_price`. */
+  subtotal: number;
+  /** The whole gap between the subtotal and `total_price`. */
+  adjustment: number;
+  /**
+   * Cents the coupon took off, straight from `bookings.discount_amount`.
+   * `null` when unknown — no coupon, or a booking created before that column
+   * started being written.
+   */
+  couponDiscount: number | null;
+  /**
+   * What the gap leaves once the coupon is accounted for: the long-trip add-on
+   * concession. `null` when `couponDiscount` is unknown, because the remainder
+   * cannot then be attributed.
+   */
+  concession: number | null;
+}
+
 /**
- * The adjustment between the stored component prices and `total_price`.
+ * Split the gap between the stored component prices and `total_price`.
  *
- * `base_price + pickup_price + addons_price` does NOT equal `total_price` when a
- * concession or coupon applied, and the booking row exposes neither (its
- * `discount_amount` is always null). This is the derivation the backend guide
- * prescribes for reconciling a breakdown after the fact.
+ * `base_price + pickup_price + addons_price` does NOT equal `total_price` when
+ * a coupon OR the long-trip concession applied, so the gap alone is ambiguous —
+ * which is why it has always been labelled "Adjustments" rather than "Discount".
+ *
+ * Since 2026-09-19 `bookings.discount_amount` is actually written (it was
+ * declared, exposed, and never populated), so the coupon's share is now known
+ * and the remainder is the concession. Read it rather than inferring: on a long
+ * pickup with an add-on the gap also carries the 30-minute-lesson credit.
+ *
+ * Null and zero are different facts on that column — null is "no coupon, or an
+ * older booking", zero is "a coupon applied and was worth nothing here" — so a
+ * null is reported as unknown rather than folded into 0.
  */
 export function deriveBookingAdjustment(booking: {
   base_price: number;
   pickup_price: number;
   addons_price: number;
   total_price: number;
-}): { subtotal: number; adjustment: number } {
+  discount_amount?: number | null;
+}): BookingAdjustment {
   const subtotal = booking.base_price + booking.pickup_price + booking.addons_price;
-  return { subtotal, adjustment: Math.max(0, subtotal - booking.total_price) };
+  const adjustment = Math.max(0, subtotal - booking.total_price);
+
+  const couponDiscount =
+    booking.discount_amount === null || booking.discount_amount === undefined
+      ? null
+      : Math.max(0, booking.discount_amount);
+
+  return {
+    subtotal,
+    adjustment,
+    couponDiscount,
+    concession: couponDiscount === null ? null : Math.max(0, adjustment - couponDiscount),
+  };
 }
 
 // ---------------------------------------------------------------------------

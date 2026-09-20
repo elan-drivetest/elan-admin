@@ -5,21 +5,33 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trophy, Route, Users } from 'lucide-react';
 import type { DashboardAnalytics } from '@/types/admin';
-import { formatCAD } from '@/lib/utils';
 
 interface InstructorPerformanceCardsProps {
   analytics: DashboardAnalytics;
 }
 
 export default function InstructorPerformanceCards({ analytics }: InstructorPerformanceCardsProps) {
-  const performanceMetrics = [
+  const performanceMetrics: {
+    title: string;
+    amount: string | null;
+    instructorName: string;
+    icon: typeof Trophy;
+    description: string;
+    caveat?: string;
+  }[] = [
     {
-      title: 'Top Earner',
-      // SUM(hourly_rate * total_hours) — cents.
-      amount: formatCAD(analytics.top_earner.value),
+      title: 'Busiest Instructor',
+      // The endpoint ranks by SUM(hourly_rate * total_hours). Since the pay rework
+      // on 2026-09-19 that is not what anyone was paid — real earnings are
+      // base_amount + transportation_amount, frozen at accept, and total_hours is
+      // wall clock, which moves no money. The ranking is still meaningful; the
+      // dollar figure is not, so it is deliberately not rendered. Per-instructor
+      // earnings come from the server on the instructor detail modal.
+      amount: null,
       instructorName: analytics.top_earner.name,
       icon: Trophy,
       description: analytics.top_earner.description,
+      caveat: 'Ranked by recorded hours × rate — not by what was paid.',
     },
     {
       title: 'Most Distance',
@@ -50,9 +62,16 @@ export default function InstructorPerformanceCards({ analytics }: InstructorPerf
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-primary mb-1">{metric.amount}</div>
-            <div className="text-sm font-medium text-gray-900 mb-1">{metric.instructorName}</div>
+            {metric.amount ? (
+              <>
+                <div className="text-2xl font-bold text-primary mb-1">{metric.amount}</div>
+                <div className="text-sm font-medium text-gray-900 mb-1">{metric.instructorName}</div>
+              </>
+            ) : (
+              <div className="text-2xl font-bold text-primary mb-1">{metric.instructorName}</div>
+            )}
             <div className="text-xs text-gray-600">{metric.description}</div>
+            {metric.caveat && <div className="mt-1 text-xs text-gray-400">{metric.caveat}</div>}
           </CardContent>
         </Card>
       ))}

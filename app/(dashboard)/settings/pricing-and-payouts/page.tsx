@@ -23,6 +23,7 @@ import { formatCAD } from '@/lib/utils';
 import { isPricingCriticalSetting, resolvePickupPricing } from '@/lib/pricing-config';
 import { calculatePickupPrice } from '@/lib/utils/booking-calculations';
 import {
+  DERIVED_SETTING_KEYS,
   SETTING_GROUPS,
   SETTING_ORDER,
   describeInPractice,
@@ -112,9 +113,19 @@ export default function PricingAndPayoutsPage() {
     return values;
   }, [byKey, pricing]);
 
-  /** Anything the backend added that this screen has no wording for yet. */
+  /**
+   * Anything the backend added that this screen has no wording for yet.
+   *
+   * A derived key is excluded deliberately: `instructor_base_price` is computed
+   * from `instructor_rate` and published read-only, so a row carrying that key is
+   * an orphan nothing reads — offering it as a field would let an admin "set" a
+   * number that does nothing (ADMIN_SETTINGS.md §3.2).
+   */
   const extraRows = useMemo(
-    () => rows.filter((row) => !SETTING_ORDER.includes(row.key)),
+    () =>
+      rows.filter(
+        (row) => !SETTING_ORDER.includes(row.key) && !DERIVED_SETTING_KEYS.includes(row.key),
+      ),
     [rows],
   );
 
@@ -163,9 +174,10 @@ export default function PricingAndPayoutsPage() {
                   <div className="min-w-0">
                     <p className="font-semibold text-gray-900">What a pickup costs</p>
                     <p className="mt-1 max-w-xl text-sm leading-relaxed text-gray-600">
-                      First {pricing.baseDistance} km at{' '}
-                      {formatCAD(pricing.baseRate, { suffix: false })}/km, then{' '}
-                      {formatCAD(pricing.normalRate, { suffix: false })}/km. The test-centre fee and
+                      Up to {pricing.baseDistance} km, {formatCAD(pricing.baseRate, { suffix: false })}/km
+                      charged both ways — the instructor drives the customer there and home. Past
+                      that it tapers to one way at {formatCAD(pricing.normalRate, { suffix: false })}/km,
+                      so the fare steps down at {pricing.baseDistance} km. The test-centre fee and
                       add-ons are charged on top.
                     </p>
                   </div>
@@ -201,6 +213,9 @@ export default function PricingAndPayoutsPage() {
                     configured={configured}
                     total={group.keys.length}
                   />
+                  {group.note && (
+                    <p className="max-w-3xl text-sm leading-relaxed text-gray-600">{group.note}</p>
+                  )}
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {group.keys.map((key) => {
                       const setting = byKey.get(key);

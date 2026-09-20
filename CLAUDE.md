@@ -130,6 +130,13 @@ Prices are handled **in cents** throughout.
 - `formatCAD(cents)` in `lib/utils.ts` is the display formatter — it already includes `$`, so never pair it with a `DollarSign` icon.
 - `formatBookingStatus(status)` in `lib/utils.ts` maps every backend `BookingStatusEnum` value to a badge class + label, with a humanized fallback for unknown statuses. Use it instead of ad-hoc status colour maps.
 - `lib/utils/booking-calculations.ts` is a **line-for-line port of the server's pricing engine** (`BookingsService.create` / `.createByAdmin`): `calculatePickupPrice`, `calculateConcession`, `calculateCouponDiscount`, and `calculateBookingPrice` (the full pipeline, in the server's order). `deriveBookingAdjustment` reconciles a stored booking whose components don't sum to `total_price`. Mirror any change from the backend — never invent pricing rules here.
+- **The pickup fare is billed round trip inside `base_distance` and one way past it**:
+  `d <= base_distance ? d × base_rate × 2 : base_distance × base_rate + (d - base_distance) × normal_rate`.
+  The fare therefore *steps down* as distance crosses `base_distance`. That `× 2` was missing
+  from `calculatePickupPrice` (and from BUSINESS_LOGIC.md §16's reference helper) between
+  2026-08-15 and 2026-09-19 and under-quoted every short pickup by half — a 12.4 km pickup
+  previewed at $92.40 against a real charge of $104.80. `describePickupFare` carries a
+  `billedRoundTrip` flag so the breakdown labels say which branch applied.
 - **Nothing about pricing is hardcoded.** `base_distance` / `base_rate` / `normal_rate` come from `GET /admin/settings` via `hooks/usePricingConfig.ts` (shared module-level cache; call `invalidatePricingConfig()` after editing a setting). `lib/pricing-config.ts` ports the server's `getPickupPricingSettings()` parsing and fallback rules exactly, and reports which keys fell back so the UI can flag an unverified estimate.
 - The **long-trip concession** fires only when an add-on is selected AND `distance > base_distance`, and deducts the 30-minute-lesson price for the test type. It is a real deduction, not a badge.
 - **Add-ons are pricing config too**, and the create-booking form reads them from the
@@ -150,23 +157,59 @@ Prices are handled **in cents** throughout.
   BUSINESS_LOGIC.md §17.13 names the date-picker minimum as the exact thing a
   client hardcodes; §5.1 STEP 0 is the rule.
 - **Coupons:** `discount` is CENTS for `discount_type: 'fixed'` but WHOLE PERCENT for `'percentage'` — and every `is_failure_coupon` is treated as a percentage regardless. Use `formatCouponDiscount` / `isPercentageCoupon` / `sumFixedCouponValue` from `lib/utils.ts`; never format `coupon.discount` as money directly.
+  `calculateCouponDiscount` in `lib/utils/booking-calculations.ts` mirrors the backend's
+  `src/coupons/utils/coupon-discount.utils.ts`, which since 2026-09-19 is the single place
+  that arithmetic lives (both the preview and booking creation call it). Mirror changes from
+  there.
+- **Coupon activation is a two-state choice, never a date meaning "now".** The server rejects
+  any past `start_date`, and a picker's "today" is midnight — for a bare `YYYY-MM-DD`,
+  midnight *UTC*, i.e. 8pm yesterday in Toronto. Every expressible "now" was in the past, so
+  coupons took 24 hours to go live. `activate_now: true` sets the start to the server's clock
+  and ignores `start_date` entirely, on **create and update** — `{ activate_now: true }` alone
+  is a valid PUT body. The create form offers "Start immediately" / "Schedule for later"; the
+  edit form offers "Start this coupon now" when `start_date` is still in the future.
+- **`is_recurrent: false` means once IN TOTAL, across all customers** — not once per customer.
+  The forms used to say the opposite. Label it plainly wherever it is editable.
 - `lib/utils/refund-calculations.ts` ports the refund math. `refund_requests.amount` is **already** `floor(total × pct/100)` — never re-apply the percentage. The payload omits the booking total, so `deriveBookingTotal()` reconstructs it (exact at 100%, ±1¢ otherwise) and the UI labels overrides as estimates.
 - Distance is always the server's Google driving distance (`POST /admin/bookings/calculate-distance`). There is deliberately **no local Haversine fallback** — a straight-line distance underprices a pickup by roughly half. On failure the preview is withheld and submission blocked.
-- **Instructor pay is never derived client-side.** Every screen reads each ride's own
-  `hourly_rate` (`InstructorDetailModal`, `RideSessionsTable`, `DashboardAnalyticsMetrics`)
-  and the server-stamped `payment_scheduled_at`, because an **admin-assigned** ride settles
-  at the `ride_sessions.hourly_rate` column default (8000) while a self-accepting instructor
-  snapshots the `instructor_rate` setting (4000). There used to be a port of the
-  `/rides/available` estimate here — it was deleted once the booking modal stopped
-  forecasting instructor earnings. If instructor economics is ever surfaced again, note the
-  reader is a **different contract** from pickup pricing: `parseInt` (not `Number`) and **no
-  fallback** — either value ≤ 0 and the backend's `/rides/available` throws 500, so report
-  unavailable rather than substituting.
+- **Instructor pay is never derived client-side.** The pay model was rewritten on
+  2026-09-19 (BUSINESS_LOGIC.md §6): a ride pays
+  `(instructor_rate × 3) + round(transportation_hours × instructor_rate)` — a flat
+  road-test base on **every** ride plus the time spent driving the customer
+  `pickup → centre → drop-off` (the one-way leg doubled, from `bookings.pickup_duration`).
+  It is computed once and **frozen onto the ride when the instructor accepts**, so a later
+  rate change never re-prices accepted work and any client-side recomputation drifts.
+  `lib/utils/instructor-pay.ts` is a **reader, not a calculator**: `readPayBreakdown()`
+  normalises the snake_case (admin/booking) and camelCase (instructor) spellings and returns
+  `null` when `base_amount` is 0 — the marker of a ride accepted before the deploy, which
+  settles on the old wall-clock arithmetic and must fall back to showing its total alone.
+  `formatDrivingTime()` renders `0.6` as "36 min", never "0.6 hrs".
+  Consequences to hold on to:
+  - `ride_price` on a booking and `instructor_earnings` on a ride are **exact payouts**,
+    not estimates. Never label them "approx".
+  - `total_hours` / `totalHours` is wall-clock Start→Stop and is **reporting only**.
+    Never multiply it by `hourly_rate` and call the result earnings — that answer is wrong
+    by the whole base. `hourly_rate` is per **transportation** hour.
+  - `GET /rides/available` no longer 500s on a blank pricing setting; it falls back per key.
 - `formatCAD(cents, { suffix })` in `lib/utils.ts` is the one money formatter; local `formatPrice` helpers delegate to it.
 
 ### Known backend quirks (do not "fix" these without checking the API)
 
-- `POST /coupons/verify` is **customer-only** and 401s for admin sessions. `adminService.verifyCouponForAdmin()` instead searches `GET /admin/coupons` and validates expiry/active-window locally; the backend re-validates `coupon_code` at booking creation.
+- `POST /coupons/verify` is **still customer-only** (`CustomerGuard`) and 401s for admin
+  sessions, even after the 2026-09-19 coupon work gave it a `subtotal` parameter and a
+  computed `discount_amount`. `adminService.verifyCouponForAdmin()` still searches
+  `GET /admin/coupons` and validates `is_active` / `is_expired` locally; the backend
+  re-validates `coupon_code` at booking creation. This is why the admin preview keeps its own
+  port of the discount arithmetic while the client panel must read the server's number.
+- **`PUT /admin/coupons/:id` used to flatten five fields.** A partial body ran through the
+  *insert* mapper, so changing one field also wrote `discount_type: 'fixed'`,
+  `is_recurrent: false`, `is_failure_coupon: false`, `min_purchase_amount: 0` and
+  `expires_at: null` — renaming a 25% coupon made it 25 *cents* off. Fixed backend-side, but
+  rows edited before the fix may still be wrong: `lib/utils/coupon-audit.ts` flags that shape
+  on the coupons list so the audit can be done without DB access.
+  A consequence of the fix: **absent and explicitly-null now differ on `expires_at`** —
+  omitting the key keeps the stored expiry, `null` clears it. Sending `undefined` to clear an
+  expiry silently does nothing.
 - `/admin/settings` has no lookup-by-key endpoint, so `getSystemSettingByKey` / `updateSystemSettingByKey` **brute-force IDs 1–20 / 1–50** until the `key` matches. Ugly but intentional.
 - ~~`/drive-test-centers` omits `status`~~ — **no longer true.** `DriveTestCenter.status`
   carries no serialization-group decorator in the backend domain class, so it is
@@ -203,12 +246,28 @@ Non-negotiables from that spec, repeated here so they are always in context:
 - Auth is **httpOnly cookies**, not bearer tokens. Lists are cursor-paginated.
 - `total_price` is authoritative — the component prices do **not** sum to it when a
   coupon or the >50 km add-on concession applied.
-- `booking.discount_amount` is **always `null`**; the discount lives in `coupon_usages`.
+- ~~`booking.discount_amount` is **always `null`**~~ — **written since 2026-09-19** on both
+  booking paths. `null` = no coupon, `0` = a coupon applied but was worth nothing, `> 0` =
+  cents saved; null and zero are distinct facts. Bookings created before that deploy are all
+  null — treat null as *unknown*, not zero. `deriveBookingAdjustment` uses it to split the
+  subtotal→total gap into coupon vs long-trip credit, and falls back to one combined
+  "Adjustments" line when it is null. Never infer the discount from
+  `base_price + pickup_price + addons_price - total_price`: that also absorbs the concession.
 - Admin-created bookings get a **30-minute** payment reconciliation window (customer
   bookings get 2 minutes); the Stripe Checkout session itself expires in 30 minutes.
-- Admin-**assigned** rides currently pay **$80/h** while instructor-**accepted** rides
-  pay **$40/h**, because `ride_sessions.hourly_rate` is only snapshotted on self-accept.
-  Known backend bug — surface `hourly_rate` rather than assuming a rate.
+- ~~Admin-**assigned** rides pay **$80/h** while instructor-**accepted** rides pay
+  **$40/h**~~ — **fixed** on 2026-09-19. All three claim paths now snapshot the full
+  breakdown and the `ride_sessions.hourly_rate` column default is 4000. A historical
+  `hourly_rate: 8000` is a pre-fix row, deliberately not backfilled — still surface
+  each ride's own `hourly_rate` rather than assuming a rate.
+- **There is no `instructor_base_price` setting**, and there must not be one. The road-test
+  portion is `instructor_rate × 3`, a backend code constant (`INSTRUCTOR_BASE_HOURS`).
+  `GET /v1/pricing-config` publishes the name as a **derived, read-only** value; a row with
+  that key in `GET /admin/settings` is an orphan nothing reads, which is why
+  `DERIVED_SETTING_KEYS` filters it out of the settings screen's "Other settings" section.
+- Margin is now a live concern: a test centre whose `base_price` is below
+  `instructor_rate × 3` loses money on a meet-at-centre booking before anyone drives.
+  `/settings/test-centers` flags those rows against `resolveInstructorPayFloor()`.
 
 ### The settings screen contract
 
@@ -217,10 +276,13 @@ for `/settings/pricing-and-payouts` — endpoints, response shape, blast radius 
 key, and the validation the UI must enforce. Read it before touching that screen.
 Non-negotiables from it:
 
-- **17 setting keys** (the original 8 plus 9 business rules added 2026-08-13:
+- **19 setting keys** (the original 8, the 9 business rules added 2026-08-13 —
   booking lead time, the refund ladder, failure-coupon terms, payout delay, ride
-  start window, transfer cutoff). All are `settings` rows; all follow the same
-  fallback contract. The screen renders the whole catalogue as a checklist —
+  start window, transfer cutoff — plus `test_duration_hours` and
+  `max_pickup_distance_km`, which joined the published response on 2026-09-19).
+  All are `settings` rows; all follow the same fallback contract. The 20th key
+  `GET /v1/pricing-config` returns, `instructor_base_price`, is **derived, not
+  stored** — see the quirks above. The screen renders the whole catalogue as a checklist —
   a missing row is the thing an admin most needs to see, because the seeder only
   fills an empty table and never backfills.
 - `value` is **always a string on the wire**. `@IsString()` with no implicit

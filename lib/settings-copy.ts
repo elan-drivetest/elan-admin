@@ -95,32 +95,59 @@ export const SETTING_COPY: Record<string, SettingCopy> = {
       'Changes what long-distance customers are charged from the next booking onward. The customer app previews prices with its own copy of this number — until it reads the live pricing endpoint, customers can be quoted one price and charged another.',
     missingConsequence: 'Bookings quietly fall back to $0.50/km.',
   },
+  max_pickup_distance_km: {
+    label: 'Furthest pickup allowed',
+    meaning:
+      'A pickup further than this from the test centre is refused at booking rather than priced.',
+    unit: 'km',
+    group: 'pickup',
+    risk: 'medium',
+    mustBePositive: true,
+    warning:
+      'This is the service area, not a price. Raising it lets a mistyped address produce a four-figure fare and publish a multi-thousand-kilometre job to instructors; lowering it turns away bookings you may already be serving.',
+    missingConsequence: 'Falls back to 300 km.',
+  },
 
   // --- Instructor pay & rides ---------------------------------------------
   instructor_rate: {
-    label: 'Instructor pay per hour',
+    // Changed meaning on 2026-09-19 without changing value (ADMIN_SETTINGS.md §3.2).
+    // It used to buy an hour of the whole appointment; it now buys an hour of
+    // transportation, and the road test is a fixed three hours of the same rate.
+    label: 'Instructor pay rate',
     meaning:
-      'What an instructor earns per hour of ride time. Locked in when they accept a job, so a change never re-prices accepted work.',
+      'The only lever on instructor pay. Every ride pays three hours of this for the road test itself, plus this per hour of driving the customer to the centre and home.',
     unit: 'cents-per-hour',
     group: 'rides',
     risk: 'high',
     mustBePositive: true,
     warning:
-      'The instructor job board reads this on every load and fails outright if it is zero or blank — no instructor would see any job. It also sets take-home pay on every job accepted from now on.',
+      'This scales the whole payout, not just the driving — a job pays three hours of it before a single kilometre is driven. The job board picks it up immediately and every ride freezes it at the moment an instructor accepts, so accepted work keeps the old rate. Check it against the test-centre fee before raising it.',
     missingConsequence:
-      'The instructor job board fails with an error, and any ride that does get accepted pays $80.00/hour — double the intended rate.',
+      'Instructor pay quietly falls back to $40.00/hour — a $120.00 road test plus $40.00 per driving hour.',
   },
   average_distance_per_hour: {
-    label: 'Assumed driving speed',
+    // Demoted to a legacy fallback on 2026-09-19: drive time now comes from
+    // `bookings.pickup_duration`, captured from Google when the booking was taken.
+    label: 'Fallback driving speed',
     meaning:
-      'Used only to estimate how long a job takes, so instructors can judge it before accepting. Real payouts use the clock.',
+      'Only used for bookings taken before drive time was recorded. Everything since is paid on Google’s actual drive time.',
     unit: 'km-per-hour',
     group: 'rides',
-    risk: 'high',
+    risk: 'low',
     mustBePositive: true,
     warning:
-      'The instructor job board reads this on every load and fails outright if it is zero or blank — no instructor would see any job. A lower speed also makes every job look longer and better paid than it is.',
-    missingConsequence: 'The instructor job board fails with an error until this row exists.',
+      'Affects only the shrinking set of older bookings with no recorded drive time — a lower speed pays more driving hours on those and nothing else. Leave it at 50 unless you are deliberately repricing that backlog.',
+    missingConsequence:
+      'Those older bookings fall back to 50 km/h. Bookings with a recorded drive time are unaffected either way.',
+  },
+  test_duration_hours: {
+    label: 'Expected appointment length',
+    meaning:
+      'How long a road test is described as taking. Display only — it stopped being part of instructor pay on 2026-09-19.',
+    unit: 'hours',
+    group: 'rides',
+    risk: 'low',
+    missingConsequence: 'Falls back to 1 hour. No money moves either way.',
   },
   instructor_payout_delay_days: {
     label: 'Payout hold after a ride',
@@ -248,7 +275,31 @@ export interface SettingGroup {
   id: SettingGroupId;
   title: string;
   keys: string[];
+  /** One line under the heading, where the group as a whole needs a caveat. */
+  note?: string;
 }
+
+/**
+ * The road test is paid as three hours of `instructor_rate`.
+ *
+ * `INSTRUCTOR_BASE_HOURS` is a backend code constant
+ * (`src/utils/instructor-pay.utils.ts`), not a dial. It is mirrored here only so
+ * the rate editor can show what a rate is worth before it is saved — nothing in
+ * this app computes an actual payout, which always comes from the server.
+ */
+export const INSTRUCTOR_BASE_HOURS = 3;
+
+export function instructorBaseAmount(rateCents: number): number {
+  return rateCents * INSTRUCTOR_BASE_HOURS;
+}
+
+/**
+ * Published by `GET /v1/pricing-config` but computed, not stored
+ * (ADMIN_SETTINGS.md §1, §3.2). If one of these ever appears in
+ * `GET /admin/settings` it is an orphan row somebody created by hand and nothing
+ * reads it — the screen must not offer it as a field.
+ */
+export const DERIVED_SETTING_KEYS = ['instructor_base_price'];
 
 /**
  * The full catalogue, grouped for scanning. The screen renders every key whether
@@ -257,16 +308,25 @@ export interface SettingGroup {
  * to see (§6).
  */
 export const SETTING_GROUPS: SettingGroup[] = [
-  { id: 'pickup', title: 'Pickup pricing', keys: ['base_distance', 'base_rate', 'normal_rate'] },
+  {
+    id: 'pickup',
+    title: 'Pickup pricing',
+    keys: ['base_distance', 'base_rate', 'normal_rate', 'max_pickup_distance_km'],
+  },
   {
     id: 'rides',
     title: 'Instructor pay & rides',
+    // ADMIN_SETTINGS.md §3.2: `instructor_rate` is the whole of instructor pay.
+    // The road-test portion is derived from it in code and is deliberately not a
+    // row — see DERIVED_SETTING_KEYS.
+    note: 'Instructor pay is one rate. The road test is paid as three hours of it on every ride — there is no separate base to edit.',
     keys: [
       'instructor_rate',
       'average_distance_per_hour',
       'instructor_payout_delay_days',
       'ride_start_window_hours',
       'ride_transfer_cutoff_hours',
+      'test_duration_hours',
     ],
   },
   {
@@ -403,6 +463,19 @@ export function toEditorValue(key: string, storedValue: string): string {
   return getSettingEditorSpec(key).mode === 'dollars' ? (parsed / 100).toFixed(2) : String(parsed);
 }
 
+/**
+ * What the typed value is worth beyond its own unit, shown next to the input.
+ *
+ * Only `instructor_rate` has one: the ×3 road-test multiplier is invisible in the
+ * raw number, and a rate that looks like a modest edit moves the whole payout.
+ */
+export function getEditorHint(key: string, numericValue: number): string | null {
+  if (key !== 'instructor_rate' || numericValue <= 0) return null;
+  const rate = formatCAD(numericValue, { suffix: false });
+  const base = formatCAD(instructorBaseAmount(numericValue), { suffix: false });
+  return `${rate}/hour → every ride pays ${base} for the road test (3 × the rate), plus ${rate} per driving hour.`;
+}
+
 export type EditorParseResult =
   | { ok: true; storedValue: string; numericValue: number }
   | { ok: false; error: string };
@@ -491,34 +564,51 @@ export function describeInPractice(
     case 'base_distance': {
       if (baseDistance === null || baseRate === null || normalRate === null) return null;
       const sample = 70;
+      // Inside the included distance the fare is billed BOTH WAYS; past it, one
+      // way on the tiered rate. The fare jumps down as distance crosses the
+      // boundary — say the real numbers either side rather than smoothing it.
       if (sample <= baseDistance) {
-        return `A ${sample} km pickup still sits inside the included distance, so it is all charged at ${money(baseRate)}/km — ${money(sample * baseRate)}.`;
+        return `A ${sample} km pickup sits inside the included distance, so it is charged both ways at ${money(baseRate)}/km — ${money(sample * baseRate * 2)}.`;
       }
       const excess = sample - baseDistance;
       const total = baseDistance * baseRate + excess * normalRate;
-      return `A ${sample} km pickup = ${baseDistance} km at ${money(baseRate)}/km plus ${excess} km at ${money(normalRate)}/km = ${money(total)}.`;
+      return `A ${sample} km pickup = ${baseDistance} km at ${money(baseRate)}/km plus ${excess} km at ${money(normalRate)}/km = ${money(total)}; inside ${baseDistance} km it would be billed both ways instead.`;
     }
 
     case 'base_rate':
       if (baseRate === null || baseDistance === null) return null;
-      return `Every 10 km inside the first ${baseDistance} km adds ${money(baseRate * 10)} to the customer's bill.`;
+      return `Every 10 km inside the first ${baseDistance} km adds ${money(baseRate * 10 * 2)} to the customer's bill — the drive is charged there and back.`;
 
     case 'normal_rate':
       if (normalRate === null || baseDistance === null) return null;
       return `Every 10 km past the first ${baseDistance} km adds ${money(normalRate * 10)} to the customer's bill.`;
 
-    case 'instructor_rate':
+    case 'instructor_rate': {
       if (instructorRate === null) return null;
-      return `A 90-minute job pays the instructor ${money(instructorRate * 1.5)}.`;
+      // 18 minutes each way — the worked example in BUSINESS_LOGIC.md §15.
+      const base = instructorBaseAmount(instructorRate);
+      const withDriving = base + Math.round(0.6 * instructorRate);
+      return `Every ride pays ${money(base)} for the road test; 18 minutes' drive each way makes it ${money(withDriving)}.`;
+    }
 
     case 'average_distance_per_hour': {
       if (speed === null || speed <= 0) return null;
-      const sample = 75;
-      const hours = sample / speed;
+      const sample = 30;
+      const hours = (sample * 2) / speed;
       const worth =
-        instructorRate === null ? '' : ` — about ${money(hours * instructorRate)} to the instructor`;
-      return `A ${sample} km job is shown to instructors as ${formatHours(hours)}${worth}.`;
+        instructorRate === null
+          ? ''
+          : ` — ${money(Math.round(hours * instructorRate))} on top of the road-test base`;
+      return `An older ${sample} km pickup with no recorded drive time is paid as ${formatHours(hours)} of driving${worth}.`;
     }
+
+    case 'test_duration_hours':
+      if (value === null) return null;
+      return `Bookings are described as ${formatHours(value)} long. Instructor pay does not move with it.`;
+
+    case 'max_pickup_distance_km':
+      if (value === null) return null;
+      return `A pickup more than ${value} km from the test centre is refused at booking.`;
 
     case 'instructor_payout_delay_days':
       if (value === null) return null;

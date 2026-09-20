@@ -17,6 +17,7 @@ import type { AdminInstructorDetail } from '@/types/admin';
 import Image from 'next/image';
 import FilePreviewerModal from './FilePreviewerModal';
 import { formatCAD } from '@/lib/utils';
+import { formatDrivingTime, readPayBreakdown } from '@/lib/utils/instructor-pay';
 
 interface InstructorDetailModalProps {
   isOpen: boolean;
@@ -330,7 +331,13 @@ export default function InstructorDetailModal({
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {instructor.recent_rides.slice(0, 5).map((ride) => (
+                    {instructor.recent_rides.slice(0, 5).map((ride) => {
+                      // Rides accepted before 2026-09-19 carry no breakdown and
+                      // settle on the old wall-clock arithmetic — their total is
+                      // still right, so fall back to showing it alone.
+                      const pay = readPayBreakdown(ride, ride.instructor_earnings);
+
+                      return (
                       <div key={ride.id} className="p-3 bg-gray-50 rounded-lg space-y-2">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -354,11 +361,39 @@ export default function InstructorDetailModal({
                           <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
                           <span className="break-all">{ride.pickup_location} → {ride.dropoff_location}</span>
                         </div>
+
+                        {/* What the payout is made of. Without it, a $144.00 payout
+                            against a $40/h rate and 1.75 recorded hours cannot be
+                            reconciled by anyone looking at this screen. */}
+                        {pay && (
+                          <div className="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs">
+                            <div className="flex items-center justify-between text-gray-600">
+                              <span>Road test</span>
+                              <span className="tabular-nums text-gray-900">{formatPrice(pay.baseAmount)}</span>
+                            </div>
+                            {pay.hasTransportation ? (
+                              <div className="mt-1 flex items-center justify-between text-gray-600">
+                                <span>
+                                  Driving {formatDrivingTime(pay.transportationHours)}
+                                  <span className="text-gray-400"> · {formatPrice(pay.hourlyRate)}/h</span>
+                                </span>
+                                <span className="tabular-nums text-gray-900">
+                                  {formatPrice(pay.transportationAmount)}
+                                </span>
+                              </div>
+                            ) : (
+                              <p className="mt-1 text-gray-400">Met at the test centre — no driving paid.</p>
+                            )}
+                          </div>
+                        )}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-xs text-gray-500 border-t pt-2">
                           <span>Start: <span className="text-gray-700">{formatDate(ride.start_time)}</span></span>
                           {ride.end_time && <span>End: <span className="text-gray-700">{formatDate(ride.end_time)}</span></span>}
-                          <span>{ride.total_distance}km • {ride.total_hours}h</span>
-                          <span>Rate: <span className="text-gray-700">{formatPrice(ride.hourly_rate)}/h</span></span>
+                          <span>{ride.total_distance}km • {ride.total_hours}h on the clock</span>
+                          {/* Per DRIVING hour, not per hour of the appointment —
+                              labelling it "rate" invites hours x rate arithmetic
+                              that is wrong by the whole road-test base. */}
+                          <span>Driving rate: <span className="text-gray-700">{formatPrice(ride.hourly_rate)}/h</span></span>
                           {ride.payment_scheduled_at && (
                             <span>Payout due: <span className="text-gray-700">{formatDate(ride.payment_scheduled_at)}</span></span>
                           )}
@@ -367,7 +402,8 @@ export default function InstructorDetailModal({
                           </span>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
